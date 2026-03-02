@@ -122,6 +122,15 @@ const TASK_KEYWORDS: Record<string, string[]> = {
 
 function detectTaskType(message: string): string {
     const msg = message.toLowerCase();
+
+    // ── Length-aware routing (takes priority over keywords) ───────────────
+    if (message.length > 3000) {
+        return 'long_context'; // GLM handles long text best
+    }
+    if (message.length < 100 && (msg.includes('code') || msg.includes('代码') || msg.includes('function') || msg.includes('函数'))) {
+        return 'code_gen'; // DeepSeek for quick short code tasks
+    }
+
     for (const [taskId, keywords] of Object.entries(TASK_KEYWORDS)) {
         if (keywords.some(k => msg.includes(k))) {
             return taskId;
@@ -291,6 +300,23 @@ async function main() {
                     required: ['task'],
                 },
             },
+            {
+                name: 'ai_multi_ask',
+                description: 'Ask multiple AI models the same question in parallel and compare their responses. Best for getting diverse perspectives, cross-validating answers, or finding the best response.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        message: { type: 'string', description: 'The question or task to send to all models.' },
+                        providers: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: 'List of provider names to query in parallel (e.g. ["deepseek", "glm", "qwen"]). Omit to use all enabled models.',
+                        },
+                        system_prompt: { type: 'string', description: 'Optional system-level instructions for all models.' },
+                    },
+                    required: ['message'],
+                },
+            },
         ],
     }));
 
@@ -393,6 +419,76 @@ async function main() {
                 });
                 return { content: [{ type: 'text', text: `Error calling ${route.label}: ${msg}` }], isError: true };
             }
+        }
+
+        // ── ai_multi_ask ──────────────────────────────────────────────────
+        if (request.params.name === 'ai_multi_ask') {
+            const args = request.params.arguments as { message: string; providers?: string[]; system_prompt?: string };
+            if (!args?.message) {
+                return { content: [{ type: 'text', text: 'Error: message is required' }], isError: true };
+            }
+
+            // Determine which providers to query
+            const enabledModels = (config.models || []).filter(m => m.enabled && m.apiKey);
+            let providerList: string[];
+            if (args.providers && args.providers.length > 0) {
+                providerList = args.providers;
+            } else if (enabledModels.length > 0) {
+                // Use all enabled models (up to 5 to avoid overload)
+                providerList = enabledModels.slice(0, 5).map(m => m.id);
+            } else {
+                providerList = ['deepseek', 'glm', 'qwen'];
+            }
+
+            const dbPath = (config as any).dbPath;
+
+            // Run all in parallel
+            const t0 = Date.now();
+            const tasks = providerList.map(async (provider) => {
+                const route = resolveRoute(args.message, config, provider);
+                if (!route) return { provider, error: `No config for "${provider}"` };
+                const ts = Date.now();
+                try {
+                    const result = await callProvider(route, args.message, args.system_prompt);
+                    saveHistory(dbPath, {
+                        method: 'ai_multi_ask', model: route.modelId,
+                        duration: Date.now() - ts,
+                        inputTokens: result.inputTokens, outputTokens: result.outputTokens,
+                        requestPreview: args.message, responsePreview: result.text,
+                        status: 'success',
+                    });
+                    return { provider: route.label, text: result.text, duration: Date.now() - ts, tokens: (result.inputTokens || 0) + (result.outputTokens || 0) };
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    saveHistory(dbPath, {
+                        method: 'ai_multi_ask', model: route.modelId,
+                        duration: Date.now() - ts,
+                        requestPreview: args.message, responsePreview: msg,
+                        status: 'error', errorMessage: msg,
+                    });
+                    return { provider: route.label, error: msg };
+                }
+            });
+
+            const results = await Promise.allSettled(tasks);
+            const totalMs = Date.now() - t0;
+
+            // Format comparison output
+            const sections: string[] = [`🔀 **ai_multi_ask** — ${providerList.length} models | ${totalMs}ms total\n`];
+            for (const r of results) {
+                if (r.status === 'fulfilled') {
+                    const v = r.value;
+                    if (v.error) {
+                        sections.push(`---\n### ❌ ${v.provider}\n${v.error}`);
+                    } else {
+                        sections.push(`---\n### ✅ ${v.provider} (${v.duration}ms | ${v.tokens} tokens)\n${v.text}`);
+                    }
+                } else {
+                    sections.push(`---\n### ❌ Error\n${r.reason}`);
+                }
+            }
+
+            return { content: [{ type: 'text', text: sections.join('\n') }] };
         }
 
         return {

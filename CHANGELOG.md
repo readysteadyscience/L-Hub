@@ -6,7 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.2] - 2026-03-02
+### Added
+- **`ai_multi_ask` 工具** — 一次并行调用多个 AI 模型，汇总对比结果。指定 `providers` 列表或留空（自动选全部已配置模型，最多 5 个）
+- **路由长度感知** — 消息 > 3000 字自动路由到 long_context 最优模型（GLM）；< 100 字纯代码短问题快速走 DeepSeek
+- **历史面板搜索框** — 可按 method 名、模型名、prompt 内容实时过滤调用历史记录
+
 ## [0.1.1] - 2026-03-02
+
 ### Fixed
 - **调用历史真实写入**：修复 MCP server 调用 AI API 后不写历史记录的 Bug。每次 `ai_ask` / `ai_codex_task` 调用后，耗时、模型名、Token 数均写入历史面板可查
 
