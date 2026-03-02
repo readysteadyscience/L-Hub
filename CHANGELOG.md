@@ -6,6 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.3] - 2026-03-02
+
+### Added
+- **`ai_gemini_task` 工具** — 调用本地 Gemini CLI（需已安装 `@google/gemini-cli`），支持 `prompt`、`model`、`working_dir` 参数。Gemini 以非交互模式（`-p --yolo`）执行，自动清理 ANSI 色码后返回纯文本结果
+- **文件上下文注入** — `ai_ask` / `ai_multi_ask` 新增可选参数 `file_paths: string[]`，自动读取本地文件内容并拼入 system prompt。支持 `~` 路径扩展，单文件上限 200KB，总量 1MB，超限自动跳过并附加警告说明
+- **自动 Fallback 重试链** — `ai_ask` 遇到可重试错误（429 限速、5xx 服务错误、网络超时）时，自动顺序尝试其他已启用模型，最终响应末尾附注 ⚡ 标记说明实际使用的模型
+- **`ai_list_providers` 新增 Gemini CLI 状态** — 同 Codex CLI，显示是否安装及版本信息
+
+### Changed
+- **路由矩阵全面更新** — 依据 2026 年第一季度主流编程基准（SWE-bench Verified、LiveCodeBench、BFCL）持续校准各模型任务分配：
+  - 代码生成首选 **GPT/Codex 5.3**（`priority 0`）；文件级编码建议直接使用 `ai_codex_task`
+  - **MiniMax-M2.5 Coding**（SWE-bench 80.2%、BFCL 工具调用 76.8%）升为 `code_gen` 第二优先级并新增 `agentic`、`tool_calling` 任务类型
+  - **GLM-5 Coding Plan** 专注 `agentic`、`tool_calling`、`long_context`，同时作为代码生成备选
+  - **Gemini 3.1 Pro** 承接 `ui_design`（前端设计效果最佳）及 `math_reasoning`
+  - **MiniMax-M2.5 highspeed** 保留 `creative` 大量内容生成场景
+- **移除 Claude 路由** — L-Hub 作为 Antigravity（Claude Sonnet 4.6）的补充工具，不再将任务反向路由回 Claude 本身，避免冗余调用
+- **`ai_list_providers`** 输出补充显示 Gemini CLI 安装状态
+
+---
+
 ## [0.1.2] - 2026-03-02
 ### Added
 - **`ai_multi_ask` 工具** — 一次并行调用多个 AI 模型，汇总对比结果。指定 `providers` 列表或留空（自动选全部已配置模型，最多 5 个）
