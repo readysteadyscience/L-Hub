@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.4] - 2026-03-02
+
+### Fixed
+- **版本徽章同步** — README `version` badge 已与实际发布版本同步，修复之前因打包顺序错误导致 badge 显示旧版本号的问题
+- **产品亮点文案** — 更新插件详情页路由描述，去掉已过时的"代码走 DeepSeek、架构走 Claude/GLM"说法，改为当前实际默认路由
+
+### Changed
+- **Gemini CLI 补充说明** — 产品亮点"ChatGPT 账号零门槛"扩展为"ChatGPT / Google 账号零门槛"，加入 Gemini CLI（Google OAuth）说明，与 Codex CLI 对称展示
+- **快速开始** — 新增第 5 步 Gemini CLI 安装与登录步骤
+
+---
+
 ## [0.1.3] - 2026-03-02
 
 ### Added
