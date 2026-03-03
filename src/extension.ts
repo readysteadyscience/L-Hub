@@ -147,7 +147,7 @@ async function updateStatusBar(settings: SettingsManager) {
 
         const geminiCheck = spawnSync('gemini', ['--version'], { encoding: 'utf8', timeout: 3000 });
         const geminiOk = !geminiCheck.error;
-        tooltip.appendMarkdown(`🔷 Gemini CLI: ${geminiOk ? '✅ 已安装 (免密钥)' : '❌ 未安装'}  \n`);
+        tooltip.appendMarkdown(`🔷 Gemini CLI: ${geminiOk ? '✅ 已安装 (使用 Google 本地凭据)' : '❌ 未安装'}  \n`);
 
         tooltip.appendMarkdown('\n---\n\n_点击打开 Dashboard_');
 

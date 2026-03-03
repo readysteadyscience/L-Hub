@@ -224,7 +224,24 @@ const OverviewPanel: React.FC<{ lang: Lang; onSwitchTab: (tab: string) => void }
             }
             if (ev.data.command === 'testAllComplete') {
                 setTestingAll(false);
+                // Refresh stats to pick up new test results from the cache
                 vscode.postMessage({ command: 'getOverviewStats' });
+            }
+            // Listen to individual test results and update model status in real-time
+            if (ev.data.command === 'testResult' && ev.data.requestId?.startsWith('autotest_')) {
+                const parts = ev.data.requestId.split('_');
+                const configId = parts.slice(1, -1).join('_');
+                setStats(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        models: prev.models.map(m =>
+                            m.id === configId
+                                ? { ...m, status: ev.data.ok ? 'online' : 'offline', testMsg: ev.data.msg }
+                                : m
+                        ),
+                    };
+                });
             }
         };
         window.addEventListener('message', handler);
@@ -232,7 +249,7 @@ const OverviewPanel: React.FC<{ lang: Lang; onSwitchTab: (tab: string) => void }
 
         const timer = setInterval(() => {
             vscode.postMessage({ command: 'getOverviewStats' });
-        }, 30000); // Changed from 10000 to 30000 to prevent API 429 errors
+        }, 30000);
 
         return () => {
             window.removeEventListener('message', handler);

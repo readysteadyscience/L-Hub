@@ -855,6 +855,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
     const [showRouting, setShowRouting] = useState(false);
     const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
     const [codexStatus, setCodexStatus] = useState<{ installed: boolean; version?: string; loggedIn?: boolean } | null>(null);
+    const [geminiStatus, setGeminiStatus] = useState<{ installed: boolean; version?: string } | null>(null);
 
     useEffect(() => {
         const handler = (ev: MessageEvent) => {
@@ -883,10 +884,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
             if (ev.data.command === 'codexStatus') {
                 setCodexStatus({ installed: ev.data.installed, version: ev.data.version, loggedIn: ev.data.loggedIn });
             }
+            if (ev.data.command === 'geminiStatus') {
+                setGeminiStatus({ installed: ev.data.installed, version: ev.data.version });
+            }
         };
         window.addEventListener('message', handler);
         vscode.postMessage({ command: 'getModelsV2' });
         vscode.postMessage({ command: 'getCodexStatus' });
+        vscode.postMessage({ command: 'getGeminiStatus' });
         return () => window.removeEventListener('message', handler);
     }, []);
 
@@ -986,6 +991,45 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                         )}
                         <button style={{ ...s.btnSecondary, fontSize: '11px', padding: '4px 10px' }}
                             onClick={() => vscode.postMessage({ command: 'openUrl', url: 'https://github.com/openai/codex' })}>
+                            文档
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Gemini CLI Card */}
+            <div style={{ ...s.card, marginTop: '12px', borderLeft: `3px solid ${geminiStatus?.installed ? '#4285F4' : '#E8740C'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <span style={{ fontWeight: 600, fontSize: '13px' }}>
+                            {geminiStatus === null ? '🔍 检测 Gemini CLI…' : geminiStatus.installed ? '✅ Gemini CLI 已安装' : '⚠️ Gemini CLI 未安装'}
+                        </span>
+                        {geminiStatus?.version && <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '11px' }}>v{geminiStatus.version}</span>}
+                        <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '2px' }}>
+                            {geminiStatus?.installed
+                                ? '使用 Google 本地凭据 · ai_gemini_task 工具可用 · 无需 API Key'
+                                : '安装后可用 Google 账号本地凭据调用，无需 API Key'}
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        {!geminiStatus?.installed && (
+                            <button
+                                style={{ ...s.btnPrimary, fontSize: '11px', padding: '4px 10px' }}
+                                onClick={() => vscode.postMessage({ command: 'openTerminalWithCmd', cmd: 'npm install -g @google/gemini-cli && gemini' })}
+                            >
+                                安装并登录
+                            </button>
+                        )}
+                        {geminiStatus?.installed && (
+                            <button
+                                style={{ ...s.btnSecondary, fontSize: '11px', padding: '4px 10px' }}
+                                onClick={() => vscode.postMessage({ command: 'openTerminalWithCmd', cmd: 'gemini' })}
+                            >
+                                重新登录
+                            </button>
+                        )}
+                        <button style={{ ...s.btnSecondary, fontSize: '11px', padding: '4px 10px' }}
+                            onClick={() => vscode.postMessage({ command: 'openUrl', url: 'https://github.com/google/gemini-cli' })}>
                             文档
                         </button>
                     </div>

@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.12] - 2026-03-03
+
+### Fixed
+- **Overview 0/5 online** - getOverviewStats now reads test cache so tested models show online status
+- **Test All no response** - OverviewPanel now listens to testResult events in real-time
+- **Logo broken** - Added images/ to localResourceRoots so Webview can load the logo
+- **Status bar text** - Changed misleading text from free-key to Google local credentials
+
+### Added
+- **Gemini CLI card** - New status card in Config panel alongside Codex CLI
+- **Model test cache** - Test results persist across tab switches
+
 ## [0.1.11] - 2026-03-03
 
 ### Changed

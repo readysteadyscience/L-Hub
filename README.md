@@ -6,7 +6,7 @@
 
 *让 Antigravity 自动把子任务委派给最合适的专家模型，省 token、降成本*
 
-[![Version](https://img.shields.io/badge/version-0.1.11-blue?style=flat-square&logo=visualstudiocode)](https://github.com/readysteadyscience/l-hub)
+[![Version](https://img.shields.io/badge/version-0.1.12-blue?style=flat-square&logo=visualstudiocode)](https://github.com/readysteadyscience/l-hub)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](https://github.com/readysteadyscience/l-hub/blob/main/LICENSE)
 [![Brand](https://img.shields.io/badge/%E8%B5%B0%E8%B5%B7%E6%99%BA%E9%80%A0-Ready%20Steady%20Science-orange?style=flat-square)](https://github.com/ReadySteadyScience)
 [![Universe](https://img.shields.io/badge/产品线-Linglan%20Realm-blueviolet?style=flat-square)](https://github.com/ReadySteadyScience)

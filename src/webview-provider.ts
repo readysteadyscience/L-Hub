@@ -9,6 +9,8 @@ export class DashboardPanel {
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
     private _onConfigChanged?: () => void;
+    /** Cache model test results so Overview panel can display them across tab switches */
+    private _modelTestCache: Map<string, 'online' | 'offline'> = new Map();
 
     public static createOrShow(extensionUri: vscode.Uri, storage: HistoryStorage, settings: SettingsManager, onConfigChanged?: () => void) {
         const column = vscode.window.activeTextEditor
@@ -26,7 +28,10 @@ export class DashboardPanel {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'dist')],
+                localResourceRoots: [
+                    vscode.Uri.joinPath(extensionUri, 'dist'),
+                    vscode.Uri.joinPath(extensionUri, 'images'),
+                ],
                 retainContextWhenHidden: true
             }
         );
@@ -177,6 +182,18 @@ export class DashboardPanel {
                         this._panel.webview.postMessage({ command: 'codexStatus', installed: true, version, loggedIn: envCheck.status === 0 });
                         break;
                     }
+                    // ── Gemini CLI status ─────────────────────────────────────
+                    case 'getGeminiStatus': {
+                        const { spawnSync: spawnSync2 } = require('child_process');
+                        const gVer = spawnSync2('gemini', ['--version'], { encoding: 'utf8', timeout: 5000 });
+                        if (gVer.error) {
+                            this._panel.webview.postMessage({ command: 'geminiStatus', installed: false });
+                            break;
+                        }
+                        const gVersion = (gVer.stdout || '').trim();
+                        this._panel.webview.postMessage({ command: 'geminiStatus', installed: true, version: gVersion });
+                        break;
+                    }
                     // ── Open terminal with command ────────────────────────────
                     case 'openTerminalWithCmd': {
                         const terminal = vscode.window.createTerminal('L-Hub Setup');
@@ -197,7 +214,7 @@ export class DashboardPanel {
                                 modelId: m.modelId,
                                 group: (m as any).group || '',
                                 enabled: m.enabled !== false,
-                                status: key ? 'unknown' : 'offline',
+                                status: this._modelTestCache.get(m.id) || (key ? 'unknown' : 'offline'),
                                 testMsg: key ? undefined : 'No API Key',
                             });
                         }
@@ -277,12 +294,15 @@ export class DashboardPanel {
                                 });
                                 const json = await res.json() as any;
                                 if (res.ok) {
+                                    this._modelTestCache.set(m.id, 'online');
                                     this._panel.webview.postMessage({ command: 'testResult', requestId, ok: true, msg: '已连通' });
                                 } else {
+                                    this._modelTestCache.set(m.id, 'offline');
                                     const err = json?.error?.message || json?.message || `HTTP ${res.status}`;
                                     this._panel.webview.postMessage({ command: 'testResult', requestId, ok: false, msg: (err as string).substring(0, 70) });
                                 }
                             } catch (e: any) {
+                                this._modelTestCache.set(m.id, 'offline');
                                 const msg = e.message?.includes('timeout') ? '超时 15s' : (e.message || 'Error').substring(0, 60);
                                 this._panel.webview.postMessage({ command: 'testResult', requestId, ok: false, msg });
                             }
