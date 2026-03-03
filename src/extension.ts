@@ -2,12 +2,15 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { spawnSync } from 'child_process';
 import { HistoryStorage } from './storage';
 import { SettingsManager, SUPPORTED_PROVIDERS } from './settings';
 import { LinglanMcpServer } from './ws-server';
 import { DashboardPanel } from './webview-provider';
 
 let mcpServer: LinglanMcpServer;
+let statusBarItem: vscode.StatusBarItem;
+let statusRefreshTimer: ReturnType<typeof setInterval> | undefined;
 
 const KEYS_FILE = path.join(os.homedir(), '.l-hub-keys.json');
 
@@ -55,11 +58,15 @@ function autoRegisterMcpConfig(extensionPath: string) {
         const config = JSON.parse(raw);
         if (!config.mcpServers) config.mcpServers = {};
 
-        const existing = config.mcpServers['l-hub'];
+        const existing = config.mcpServers['lhub'];
         const newEntry = { command: 'node', args: [serverPath], env: {} };
 
         if (!existing || existing.args?.[0] !== serverPath) {
-            config.mcpServers['l-hub'] = newEntry;
+            // 清理旧的连字符命名，如果在的话
+            if (config.mcpServers['l-hub']) {
+                delete config.mcpServers['l-hub'];
+            }
+            config.mcpServers['lhub'] = newEntry;
             fs.writeFileSync(mcpConfigPath, JSON.stringify(config, null, 4), 'utf8');
             console.log('[L-Hub] Auto-registered mcp-server.js in Antigravity mcp_config.json');
         }
@@ -67,6 +74,95 @@ function autoRegisterMcpConfig(extensionPath: string) {
         console.error('[L-Hub] Failed to auto-register MCP config:', err);
     }
 }
+
+// ─── Status Bar ───────────────────────────────────────────────────────────────
+
+/**
+ * Update the status bar item to reflect current model configuration state.
+ * Called on activation and periodically via timer.
+ */
+async function updateStatusBar(settings: SettingsManager) {
+    if (!statusBarItem) { return; }
+
+    try {
+        const models = await settings.getModels();
+
+        // ── Resolve which models have API keys configured ──
+        const modelStatuses: Array<{ label: string; enabled: boolean; hasKey: boolean }> = [];
+        for (const m of models) {
+            const key = await settings.getModelApiKey(m.id);
+            modelStatuses.push({ label: m.label, enabled: m.enabled, hasKey: !!key });
+        }
+
+        const ready = modelStatuses.filter(m => m.enabled && m.hasKey);
+        const total = modelStatuses.length;
+        const readyCount = ready.length;
+
+        // ── Determine icon & color ──
+        let icon: string;
+        let color: vscode.ThemeColor | undefined;
+        if (readyCount === 0) {
+            icon = '$(error)';
+            color = new vscode.ThemeColor('statusBarItem.errorBackground');
+        } else if (readyCount < total) {
+            icon = '$(warning)';
+            color = new vscode.ThemeColor('statusBarItem.warningBackground');
+        } else {
+            icon = '$(pulse)';
+            color = undefined; // default
+        }
+
+        // ── Status bar text ──
+        if (readyCount === 0) {
+            statusBarItem.text = `${icon} L-Hub: 未配置`;
+        } else if (readyCount < total) {
+            statusBarItem.text = `${icon} L-Hub: ${readyCount}/${total} 就绪`;
+        } else {
+            statusBarItem.text = `${icon} L-Hub: ${readyCount} 模型就绪`;
+        }
+        statusBarItem.backgroundColor = color;
+
+        // ── Tooltip (MarkdownString for rich content) ──
+        const tooltip = new vscode.MarkdownString('', true);
+        tooltip.isTrusted = true;
+        tooltip.supportHtml = true;
+
+        tooltip.appendMarkdown('### 🔌 L-Hub 模型状态\n\n');
+
+        if (modelStatuses.length === 0) {
+            tooltip.appendMarkdown('_未配置任何模型。请打开 Dashboard 添加。_\n\n');
+        } else {
+            for (const m of modelStatuses) {
+                const status = (m.enabled && m.hasKey) ? '✅' : '❌';
+                const note = !m.hasKey ? ' — 未配置 Key' : (!m.enabled ? ' — 已禁用' : '');
+                tooltip.appendMarkdown(`${status} **${m.label}**${note}  \n`);
+            }
+            tooltip.appendMarkdown('\n---\n\n');
+        }
+
+        // ── CLI status ──
+        const codexCheck = spawnSync('codex', ['--version'], { encoding: 'utf8', timeout: 3000 });
+        const codexOk = !codexCheck.error;
+        tooltip.appendMarkdown(`🤖 Codex CLI: ${codexOk ? '✅ 已安装' : '❌ 未安装'}  \n`);
+
+        const geminiCheck = spawnSync('gemini', ['--version'], { encoding: 'utf8', timeout: 3000 });
+        const geminiOk = !geminiCheck.error;
+        tooltip.appendMarkdown(`🔷 Gemini CLI: ${geminiOk ? '✅ 已安装 (免密钥)' : '❌ 未安装'}  \n`);
+
+        tooltip.appendMarkdown('\n---\n\n_点击打开 Dashboard_');
+
+        statusBarItem.tooltip = tooltip;
+        statusBarItem.show();
+    } catch (err) {
+        console.error('[L-Hub] Failed to update status bar:', err);
+        statusBarItem.text = '$(error) L-Hub';
+        statusBarItem.tooltip = 'L-Hub: 状态获取失败';
+        statusBarItem.show();
+    }
+}
+
+
+// ─── Activation ───────────────────────────────────────────────────────────────
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('[L-Hub] Activating...');
@@ -82,7 +178,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 'L-Hub: History storage is unavailable (SQLite load failed). Settings panel will still work.',
             );
         }
-        DashboardPanel.createOrShow(context.extensionUri, storage!, settings);
+        DashboardPanel.createOrShow(context.extensionUri, storage!, settings, () => updateStatusBar(settings));
     });
     context.subscriptions.push(openPanelCommand);
 
@@ -102,7 +198,21 @@ export async function activate(context: vscode.ExtensionContext) {
     await syncKeysToFile(settings, dbFilePath);
     autoRegisterMcpConfig(context.extensionPath);
 
-    // ── STEP 4: Start WebSocket server (non-critical) ──
+    // ── STEP 4: Create Status Bar Item ──
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem.command = 'l-hub.openPanel';
+    statusBarItem.name = 'L-Hub Status';
+    context.subscriptions.push(statusBarItem);
+
+    // Initial update
+    await updateStatusBar(settings);
+
+    // Refresh every 60 seconds
+    statusRefreshTimer = setInterval(() => updateStatusBar(settings), 60_000);
+
+    console.log('[L-Hub] StatusBar indicator created ✅');
+
+    // ── STEP 5: Start WebSocket server (non-critical) ──
     try {
         mcpServer = new LinglanMcpServer(storage!, settings);
         await mcpServer.start();
@@ -113,6 +223,10 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+    if (statusRefreshTimer) {
+        clearInterval(statusRefreshTimer);
+        statusRefreshTimer = undefined;
+    }
     if (mcpServer) {
         mcpServer.stop();
     }

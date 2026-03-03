@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.10] - 2026-03-03
+
+### Fixed
+- **全生态版本对齐** — 将 MCP Server 环境中的版本号、Dashboard README 小贴纸等所有与 `package.json` 不一致的幽灵版本号清理，并正式沉淀了 `lhub-release-guide` 发版标准防御协议，规避以后的发版碎片化。
+
+## [0.1.9] - 2026-03-03
+
+### Fixed
+- **多进程历史记录丢失** — 修复了 MCP Server 子进程无法获取被 VS Code 宿主托管的 SQLite `dbPath` 配置，导致 `ai_ask` 连通打流数据写入失败、Dashboard 面板显示统计为空（0）的严重问题。
+- **Gemini CLI 状态误报** — 修复了仅安装了 npm 包但无可用凭证时错误判定为 `✅ Ready` 的体验问题，现在通过探测命令行退出码，并在底层和扩展状态栏统一标示更准确的 `✅ 已安装 (使用本地凭据)`。
+- **Dashboard UI 修复** — 补全了 Webview 的 CSP (Content Security Policy) 配置，使由于策略拦截导致的 L-Hub 本地 Logo 载入失败（裂图）问题得到修复。
+
+### Changed
+- **产品文档与高光精简** — 根据用户反馈，重构并精简了过于复杂啰嗦的产品亮点介绍；去除了过时的“模型任务绑定”举例，并将路由建议面板移动到 Dashboard 内聚展示。
+- **MCP Server 版本同步** — 修复了内部写死的 `v0.1.5` 硬编码问题，与主包保持跨平台版本一致性。
+
 ## [0.1.4] - 2026-03-02
 
 ### Fixed

@@ -6,7 +6,7 @@ export interface BridgeConfig {
 }
 
 // Legacy fixed providers (for backward compat)
-export const SUPPORTED_PROVIDERS = ['deepseek', 'glm', 'qwen', 'minimax'] as const;
+export const SUPPORTED_PROVIDERS = ['deepseek', 'glm', 'qwen', 'minimax', 'kimi', 'gpt', 'gemini', 'mistral'] as const;
 export type Provider = typeof SUPPORTED_PROVIDERS[number];
 
 // ─── v2: Dynamic ModelConfig ─────────────────────────────────────────────────
@@ -45,6 +45,11 @@ export class SettingsManager {
             if (key) { keys[provider] = key; }
         }
         return keys;
+    }
+
+    /** Get the API key for a v2 model by its model config ID */
+    public async getModelApiKey(modelConfigId: string): Promise<string | undefined> {
+        return await this.secretStorage.get(`apikey.model.${modelConfigId}`);
     }
 
     // ── v2: ModelConfig list ─────────────────────────────────────────────────

@@ -22,14 +22,20 @@ export interface RequestRecord {
 
 export class HistoryStorage {
     private db: Database.Database;
+    private dbPathStr: string;
 
     constructor(storagePath: string) {
         if (!fs.existsSync(storagePath)) {
             fs.mkdirSync(storagePath, { recursive: true });
         }
         const dbPath = path.join(storagePath, 'history.db');
+        this.dbPathStr = dbPath;
         this.db = new Database(dbPath);
         this.initSchema();
+    }
+
+    public getDbPath(): string {
+        return this.dbPathStr;
     }
 
     private initSchema() {

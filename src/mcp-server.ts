@@ -78,6 +78,7 @@ interface LHubConfig {
     version?: number;
     models?: ModelConfig[];
     legacy?: Record<string, string>;
+    dbPath?: string;
 }
 
 function readConfig(): LHubConfig {
@@ -106,7 +107,7 @@ const LEGACY_PROVIDERS: Record<string, { url: string; model: string }> = {
     // Specialized
     qwen: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max' },
     minimax: { url: 'https://api.minimax.io/v1', model: 'MiniMax-M2.5-highspeed' },
-    kimi: { url: 'https://api.moonshot.cn/v1', model: 'kimi-k2-instruct' },
+    kimi: { url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-auto' }, // k2-instruct 并非全用户开放，使用 v1-auto 兜底
     gpt: { url: 'https://api.openai.com/v1', model: 'gpt-5.3-codex' },
     gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.1-pro-preview' },
     mistral: { url: 'https://api.mistral.ai/v1', model: 'mistral-large-latest' },
@@ -458,7 +459,7 @@ function callGemini(prompt: string, model?: string, workingDir?: string): string
 
 async function main() {
     const server = new Server(
-        { name: 'l-hub', version: '0.1.3' },
+        { name: 'lhub', version: '0.1.10' },
         { capabilities: { tools: {} } }
     );
 
@@ -543,14 +544,19 @@ async function main() {
         // ── ai_list_providers ─────────────────────────────────────────────
         if (request.params.name === 'ai_list_providers') {
             const enabledModels = (config.models || []).filter(m => m.enabled && m.apiKey);
+
             const codexCheck = spawnSync('codex', ['--version'], { encoding: 'utf8', timeout: 5000 });
             const codexStatus = codexCheck.error
                 ? '❌ Not installed (run: npm install -g @openai/codex)'
-                : '✅ Ready (uses ChatGPT login)';
+                : `✅ Installed (${(codexCheck.stdout || '').trim() || 'uses ChatGPT login'})`;
+
             const geminiCheck = spawnSync('gemini', ['--version'], { encoding: 'utf8', timeout: 5000 });
-            const geminiStatus = geminiCheck.error
-                ? '❌ Not installed (npm i -g @google/gemini-cli)'
-                : `✅ Ready (${(geminiCheck.stdout || '').trim() || 'gemini'})`;
+            let geminiStatus = '❌ Not installed (npm i -g @google/gemini-cli)';
+            if (!geminiCheck.error && geminiCheck.status === 0) {
+                // gemini-cli version string can sometimes have ANSI or multiline
+                const out = (geminiCheck.stdout || '').split('\n')[0].replace(/\x1B\[[0-9;]*[a-zA-Z]|\x1B[@-_]/g, '').trim();
+                geminiStatus = `✅ Installed (Auto local credentials)`;
+            }
 
             if (enabledModels.length > 0) {
                 const lines = enabledModels.map(m =>
@@ -582,7 +588,7 @@ async function main() {
             const t0 = Date.now();
             try {
                 const result = callCodex(args.task, args.working_dir);
-                saveHistory((config as any).dbPath, {
+                saveHistory(config.dbPath, {
                     method: 'ai_codex_task', model: 'codex-cli',
                     duration: Date.now() - t0,
                     requestPreview: args.task, responsePreview: result,
@@ -591,7 +597,7 @@ async function main() {
                 return { content: [{ type: 'text', text: result }] };
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
-                saveHistory((config as any).dbPath, {
+                saveHistory(config.dbPath, {
                     method: 'ai_codex_task', model: 'codex-cli',
                     duration: Date.now() - t0,
                     requestPreview: args.task, responsePreview: msg,
@@ -610,7 +616,7 @@ async function main() {
             const t0 = Date.now();
             try {
                 const result = callGemini(args.prompt, args.model, args.working_dir);
-                saveHistory((config as any).dbPath, {
+                saveHistory(config.dbPath, {
                     method: 'ai_gemini_task', model: args.model || 'gemini-cli',
                     duration: Date.now() - t0,
                     requestPreview: args.prompt, responsePreview: result,
@@ -672,7 +678,7 @@ async function main() {
                 const warningNote = warningLines.length > 0
                     ? `\n\n> ⚠️ File context warnings: ${warningLines.join('; ')}`
                     : '';
-                saveHistory((config as any).dbPath, {
+                saveHistory(config.dbPath, {
                     method: 'ai_ask', model: result.usedModel,
                     duration: Date.now() - t0,
                     inputTokens: result.inputTokens, outputTokens: result.outputTokens,
@@ -682,7 +688,7 @@ async function main() {
                 return { content: [{ type: 'text', text: result.text + fallbackNote + warningNote }] };
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
-                saveHistory((config as any).dbPath, {
+                saveHistory(config.dbPath, {
                     method: 'ai_ask', model: route.modelId,
                     duration: Date.now() - t0,
                     requestPreview: args.message, responsePreview: msg,

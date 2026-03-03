@@ -52,6 +52,11 @@ const webviewConfig = {
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.jsx']
     },
+    plugins: [
+        new webpack.DefinePlugin({
+            'process.env.NODE_ENV': JSON.stringify('production')
+        })
+    ],
     module: {
         rules: [
             {

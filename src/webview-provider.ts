@@ -8,8 +8,9 @@ export class DashboardPanel {
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
+    private _onConfigChanged?: () => void;
 
-    public static createOrShow(extensionUri: vscode.Uri, storage: HistoryStorage, settings: SettingsManager) {
+    public static createOrShow(extensionUri: vscode.Uri, storage: HistoryStorage, settings: SettingsManager, onConfigChanged?: () => void) {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
@@ -30,12 +31,13 @@ export class DashboardPanel {
             }
         );
 
-        DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, storage, settings);
+        DashboardPanel.currentPanel = new DashboardPanel(panel, extensionUri, storage, settings, onConfigChanged);
     }
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private storage: HistoryStorage, private settings: SettingsManager) {
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private storage: HistoryStorage, private settings: SettingsManager, onConfigChanged?: () => void) {
         this._panel = panel;
         this._extensionUri = extensionUri;
+        this._onConfigChanged = onConfigChanged;
 
         this._update();
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
@@ -83,6 +85,7 @@ export class DashboardPanel {
                             if (k) { apiKeys[m.id] = k; }
                         }
                         this._panel.webview.postMessage({ command: 'loadModelsV2', models, apiKeys });
+                        this._onConfigChanged?.();
                         break;
                     }
                     case 'removeModel': {
@@ -95,6 +98,7 @@ export class DashboardPanel {
                             if (k) { apiKeys[m.id] = k; }
                         }
                         this._panel.webview.postMessage({ command: 'loadModelsV2', models, apiKeys });
+                        this._onConfigChanged?.();
                         break;
                     }
                     case 'updateModel': {
@@ -110,6 +114,7 @@ export class DashboardPanel {
                             if (k) { apiKeys[m.id] = k; }
                         }
                         this._panel.webview.postMessage({ command: 'loadModelsV2', models, apiKeys });
+                        this._onConfigChanged?.();
                         break;
                     }
                     // ── Backend-proxied connection test (bypasses CORS) ───────
@@ -119,8 +124,8 @@ export class DashboardPanel {
                             const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
                             const body = JSON.stringify({
                                 model: modelId,
-                                messages: [{ role: 'user', content: 'Reply with one word: OK' }],
-                                max_tokens: 10,
+                                messages: [{ role: 'user', content: 'Say OK' }],
+                                max_tokens: 5,
                             });
                             const res = await fetch(url, {
                                 method: 'POST',
@@ -179,6 +184,112 @@ export class DashboardPanel {
                         terminal.sendText(message.cmd);
                         break;
                     }
+
+                    // ── Overview Stats ────────────────────────────────────────
+                    case 'getOverviewStats': {
+                        const allModels = await this.settings.getModels();
+                        const modelStatuses = [];
+                        for (const m of allModels) {
+                            const key = await this.settings.getApiKey(`model.${m.id}`);
+                            modelStatuses.push({
+                                id: m.id,
+                                label: m.label || m.modelId,
+                                modelId: m.modelId,
+                                group: (m as any).group || '',
+                                enabled: m.enabled !== false,
+                                status: key ? 'unknown' : 'offline',
+                                testMsg: key ? undefined : 'No API Key',
+                            });
+                        }
+
+                        // Get history stats
+                        let todayRequests = 0;
+                        let successCount = 0;
+                        let totalLatency = 0;
+                        let totalTokens = 0;
+                        const recentRequests: any[] = [];
+                        try {
+                            const data = this.storage.queryHistory(1, 50);
+                            const records = data?.records || [];
+                            const todayStart = new Date();
+                            todayStart.setHours(0, 0, 0, 0);
+                            const todayTs = todayStart.getTime();
+
+                            for (const r of records) {
+                                if (r.timestamp >= todayTs) {
+                                    todayRequests++;
+                                    if (r.status === 'success') successCount++;
+                                    totalLatency += r.duration || 0;
+                                    totalTokens += r.totalTokens || 0;
+                                }
+                            }
+                            // Take recent 8 for timeline
+                            for (const r of records.slice(0, 8)) {
+                                recentRequests.push({
+                                    id: r.id,
+                                    timestamp: r.timestamp,
+                                    method: r.method,
+                                    model: r.model || '',
+                                    duration: r.duration || 0,
+                                    status: r.status,
+                                    totalTokens: r.totalTokens || 0,
+                                });
+                            }
+                        } catch (e) {
+                            // History storage might not be available
+                        }
+
+                        const successRate = todayRequests > 0 ? Math.round((successCount / todayRequests) * 100) : 100;
+                        const avgLatency = todayRequests > 0 ? Math.round(totalLatency / todayRequests) : 0;
+
+                        this._panel.webview.postMessage({
+                            command: 'overviewStats',
+                            stats: {
+                                models: modelStatuses,
+                                todayRequests,
+                                successRate,
+                                avgLatency,
+                                totalTokens,
+                                recentRequests,
+                            }
+                        });
+                        break;
+                    }
+
+                    // ── Test All Models ───────────────────────────────────────
+                    case 'testAllModels': {
+                        const models2 = await this.settings.getModels();
+                        const enabledModels = models2.filter(m => m.enabled !== false);
+                        // Stagger requests with 1.5s delay to avoid 429 rate limits
+                        for (let i = 0; i < enabledModels.length; i++) {
+                            const m = enabledModels[i];
+                            if (i > 0) await new Promise(r => setTimeout(r, 1500));
+                            const key = await this.settings.getApiKey(`model.${m.id}`);
+                            if (!key || !m.baseUrl) continue;
+                            const requestId = `autotest_${m.id}_${Date.now()}`;
+                            try {
+                                const url = m.baseUrl.replace(/\/$/, '') + '/chat/completions';
+                                const res = await fetch(url, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+                                    body: JSON.stringify({ model: m.modelId, messages: [{ role: 'user', content: 'Say OK' }], max_tokens: 5 }),
+                                    signal: AbortSignal.timeout(15000),
+                                });
+                                const json = await res.json() as any;
+                                if (res.ok) {
+                                    this._panel.webview.postMessage({ command: 'testResult', requestId, ok: true, msg: '已连通' });
+                                } else {
+                                    const err = json?.error?.message || json?.message || `HTTP ${res.status}`;
+                                    this._panel.webview.postMessage({ command: 'testResult', requestId, ok: false, msg: (err as string).substring(0, 70) });
+                                }
+                            } catch (e: any) {
+                                const msg = e.message?.includes('timeout') ? '超时 15s' : (e.message || 'Error').substring(0, 60);
+                                this._panel.webview.postMessage({ command: 'testResult', requestId, ok: false, msg });
+                            }
+                        }
+                        this._panel.webview.postMessage({ command: 'testAllComplete' });
+                        break;
+                    }
                 }
             },
             null,
@@ -201,7 +312,7 @@ export class DashboardPanel {
             }
             // Also keep legacy keys for backward compat
             const legacy = await this.settings.getAllApiKeys();
-            fs.writeFileSync(keysFile, JSON.stringify({ version: 2, models: enriched, legacy }, null, 2), 'utf8');
+            fs.writeFileSync(keysFile, JSON.stringify({ version: 2, models: enriched, legacy, dbPath: this.storage.getDbPath() }, null, 2), 'utf8');
         } catch (e) {
             console.error('[L-Hub] Failed to sync models to file:', e);
         }
@@ -225,11 +336,15 @@ export class DashboardPanel {
         const scriptPathOnDisk = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js');
         const scriptUri = webview.asWebviewUri(scriptPathOnDisk);
 
+        const logoPathOnDisk = vscode.Uri.joinPath(this._extensionUri, 'images', 'logo.png');
+        const logoUri = webview.asWebviewUri(logoPathOnDisk);
+
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; connect-src https: wss:;">
                 <title>L-Hub</title>
                 <style>
                     body {
@@ -248,10 +363,55 @@ export class DashboardPanel {
                         flex-direction: column;
                         overflow: hidden;
                     }
+                    /* ── Animations ─────────────────────────────────── */
+                    @keyframes pulse-glow {
+                        0%, 100% { box-shadow: 0 0 4px currentColor; opacity: 1; }
+                        50% { box-shadow: 0 0 12px currentColor, 0 0 24px currentColor; opacity: 0.85; }
+                    }
+                    @keyframes gradient-shift {
+                        0% { background-position: 0% 50%; }
+                        50% { background-position: 100% 50%; }
+                        100% { background-position: 0% 50%; }
+                    }
+                    @keyframes fade-in-up {
+                        from { opacity: 0; transform: translateY(12px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    @keyframes shimmer {
+                        0% { background-position: -200% 0; }
+                        100% { background-position: 200% 0; }
+                    }
+                    @keyframes breathe {
+                        0%, 100% { opacity: 0.6; }
+                        50% { opacity: 1; }
+                    }
+                    .animate-in { animation: fade-in-up 0.4s ease-out both; }
+                    .animate-in-1 { animation-delay: 0.05s; }
+                    .animate-in-2 { animation-delay: 0.1s; }
+                    .animate-in-3 { animation-delay: 0.15s; }
+                    .animate-in-4 { animation-delay: 0.2s; }
+                    .dot-online {
+                        animation: pulse-glow 2s ease-in-out infinite;
+                        color: #34A853;
+                    }
+                    .gradient-bg {
+                        background-size: 200% 200%;
+                        animation: gradient-shift 6s ease infinite;
+                    }
+                    .shimmer-bar {
+                        background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+                        background-size: 200% 100%;
+                        animation: shimmer 2s ease-in-out infinite;
+                    }
+                    /* ── Scrollbar ──────────────────────────────────── */
+                    ::-webkit-scrollbar { width: 6px; }
+                    ::-webkit-scrollbar-track { background: transparent; }
+                    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+                    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
                 </style>
             </head>
             <body>
-                <div id="root"></div>
+                <div id="root" data-logo-uri="${logoUri}"></div>
                 <script src="${scriptUri}"></script>
             </body>
             </html>`;

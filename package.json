@@ -3,7 +3,7 @@
   "displayName": "L-Hub",
   "description": "MCP AI Bridge — smart multi-model routing for Antigravity",
   "author": "Ready Steady Science",
-  "version": "0.1.4",
+  "version": "0.1.10",
   "license": "MIT",
   "icon": "images/logo.png",
   "publisher": "readysteadyscience",
@@ -20,8 +20,7 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "*",
-    "onCommand:l-hub.openPanel"
+    "*"
   ],
   "contributes": {
     "commands": [
@@ -47,7 +46,9 @@
             "deepseek",
             "glm",
             "qwen",
-            "minimax"
+            "minimax",
+            "kimi",
+            "mistral"
           ],
           "description": "默认路由大模型（当用户的指令未触发其他垂直分支时，作为兜底模型使用）。",
           "order": 2
@@ -68,7 +69,8 @@
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile"
+    "pretest": "npm run compile-tests && npm run compile",
+    "build:vsix": "mkdir -p releases && npx vsce package --out releases/"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

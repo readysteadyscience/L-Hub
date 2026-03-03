@@ -20,3 +20,6 @@ tsconfig.json
 **/*.test.ts
 **/*.spec.ts
 .eslintrc*
+
+.lhub_docs/
+releases/

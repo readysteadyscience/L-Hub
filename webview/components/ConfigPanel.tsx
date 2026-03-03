@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { vscode } from '../vscode-api';
+import { s, colors, radius, shadow, providerColors } from '../theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -298,18 +299,7 @@ const RELAY_PRESETS = [
     { name: '硅基流动 SiliconFlow', url: 'https://api.siliconflow.cn/v1', site: 'https://cloud.siliconflow.cn', note: '国内正规大平台' },
 ];
 
-/** Provider brand colors for visual distinction */
-const PROVIDER_COLORS: Record<string, string> = {
-    'DeepSeek': '#4A90D9',
-    'GLM (智谱)': '#6B5CE7',
-    'Qwen (通义)': '#E8740C',
-    'MiniMax': '#D94B86',
-    'Kimi K2': '#2AB5A0',
-    'OpenAI': '#10A37F',
-    'Anthropic (Claude)': '#CC785C',
-    'Google (Gemini)': '#4285F4',
-    'Mistral': '#FF6F00',
-};
+// Provider colors imported from theme.ts
 
 /** All models with known pricing, for the reference table */
 const PRICE_TABLE = Object.entries(MODEL_DEFS)
@@ -329,66 +319,7 @@ const formatPrice = (usd: number, lang: string) => {
 
 // ─── Shared Styles ────────────────────────────────────────────────────────────
 
-const s = {
-    card: {
-        background: 'var(--vscode-editor-inactiveSelectionBackground)',
-        borderRadius: '6px',
-        padding: '12px 14px',
-        marginBottom: '8px',
-        border: '1px solid var(--vscode-panel-border)',
-    } as React.CSSProperties,
-    input: {
-        width: '100%',
-        padding: '6px 9px',
-        background: 'var(--vscode-input-background)',
-        color: 'var(--vscode-input-foreground)',
-        border: '1px solid var(--vscode-input-border)',
-        borderRadius: '4px',
-        boxSizing: 'border-box' as const,
-        fontSize: '13px',
-    } as React.CSSProperties,
-    select: {
-        width: '100%',
-        padding: '6px 9px',
-        background: 'var(--vscode-input-background)',
-        color: 'var(--vscode-input-foreground)',
-        border: '1px solid var(--vscode-input-border)',
-        borderRadius: '4px',
-        boxSizing: 'border-box' as const,
-        fontSize: '13px',
-    } as React.CSSProperties,
-    btnPrimary: {
-        padding: '7px 16px',
-        background: 'var(--vscode-button-background)',
-        color: 'var(--vscode-button-foreground)',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '13px',
-        fontWeight: '600' as const,
-    } as React.CSSProperties,
-    btnSecondary: {
-        padding: '6px 13px',
-        background: 'transparent',
-        color: 'var(--vscode-descriptionForeground)',
-        border: '1px solid var(--vscode-input-border)',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '13px',
-    } as React.CSSProperties,
-    label: {
-        display: 'block',
-        marginBottom: '5px',
-        fontSize: '12px',
-        fontWeight: '600' as const,
-        color: 'var(--vscode-editor-foreground)',
-    } as React.CSSProperties,
-    hint: {
-        margin: '4px 0 0',
-        fontSize: '11px',
-        color: 'var(--vscode-descriptionForeground)',
-    } as React.CSSProperties,
-};
+// Styles imported from '../theme' — s, colors, radius, shadow, providerColors
 
 // ─── TaskBadge ────────────────────────────────────────────────────────────────
 
@@ -468,13 +399,18 @@ const ModelCard: React.FC<{
             : 'var(--vscode-descriptionForeground)';
 
     return (
-        <div style={{ ...s.card, opacity: model.enabled ? 1 : 0.5 }}>
+        <div style={{
+            ...s.card,
+            opacity: model.enabled ? 1 : 0.55,
+            borderLeft: `3px solid ${providerColors[def?.group || ''] || colors.brand}`,
+            position: 'relative' as const,
+        }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     {/* Group name (big) + model label (small subtitle) + price */}
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '13px' }}>{def?.group || model.modelId}</span>
-                        <span style={{ fontSize: '11px', color: PROVIDER_COLORS[def?.group || ''] || 'var(--vscode-descriptionForeground)', fontWeight: 500 }}>{model.label}</span>
+                        <span style={{ fontSize: '11px', color: providerColors[def?.group || ''] || 'var(--vscode-descriptionForeground)', fontWeight: 500 }}>{model.label}</span>
                         {def?.pricing && (
                             <span style={{ fontSize: '10px', color: 'var(--vscode-descriptionForeground)', background: 'var(--vscode-input-background)', border: '1px solid var(--vscode-input-border)', borderRadius: '3px', padding: '0 5px' }}>
                                 {formatPrice(def.pricing.input, lang)} / {formatPrice(def.pricing.output, lang)} per M
@@ -927,40 +863,22 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                 const loadedKeys: Record<string, string> = ev.data.apiKeys || {};
                 setModels(loadedModels);
                 setApiKeys(loadedKeys);
-                // Auto-test all models with configured keys after 2s delay
+                // Auto-test all models via extension host (avoids CORS in webview sandbox)
                 setTimeout(() => {
-                    loadedModels.forEach(async (m) => {
+                    loadedModels.forEach((m) => {
                         const key = loadedKeys[m.id];
                         if (!key || !m.baseUrl || !m.enabled) return;
-                        try {
-                            const url = m.baseUrl.replace(/\/$/, '') + '/chat/completions';
-                            const res = await fetch(url, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-                                body: JSON.stringify({ model: m.modelId, messages: [{ role: 'user', content: 'OK' }], max_tokens: 5 }),
-                                signal: AbortSignal.timeout(12000),
-                            });
-                            const json = await res.json() as any;
-                            if (res.ok) {
-                                const content = json?.choices?.[0]?.message?.content;
-                                setTestResults(prev => ({ ...prev, [m.id]: { ok: true, msg: content ? content.trim().substring(0, 15) : '已连通' } }));
-                            } else {
-                                const extractErr2 = (j: any, status: number) => {
-                                    if (j?.error?.message) return j.error.message.substring(0, 50);
-                                    if (j?.error?.code) return `错误码 ${j.error.code}`;
-                                    if (j?.message) return j.message.substring(0, 50);
-                                    if (j?.msg) return j.msg.substring(0, 50);
-                                    if (j?.code && j?.code !== 200) return `错误码 ${j.code}`;
-                                    return `HTTP ${status}`;
-                                };
-                                setTestResults(prev => ({ ...prev, [m.id]: { ok: false, msg: extractErr2(json, res.status) } }));
-                            }
-                        } catch (e: any) {
-                            const errMsg = e.message?.includes('timeout') ? '超时15s' : (e.message || 'Error').substring(0, 40);
-                            setTestResults(prev => ({ ...prev, [m.id]: { ok: false, msg: errMsg } }));
-                        }
+                        const requestId = `autotest_${m.id}_${Date.now()}`;
+                        vscode.postMessage({ command: 'testConnection', modelId: m.modelId, baseUrl: m.baseUrl, apiKey: key, requestId });
                     });
                 }, 2000);
+            }
+            // Handle auto-test results (same handler as manual test)
+            if (ev.data.command === 'testResult' && ev.data.requestId?.startsWith('autotest_')) {
+                // Extract model config id from requestId: autotest_{configId}_{timestamp}
+                const parts = ev.data.requestId.split('_');
+                const configId = parts.slice(1, -1).join('_');
+                setTestResults(prev => ({ ...prev, [configId]: { ok: ev.data.ok, msg: ev.data.msg || (ev.data.ok ? '已连通' : '失败') } }));
             }
             if (ev.data.command === 'codexStatus') {
                 setCodexStatus({ installed: ev.data.installed, version: ev.data.version, loggedIn: ev.data.loggedIn });
@@ -1116,7 +1034,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                                         borderTop: '1px solid var(--vscode-input-border)',
                                     }}>
                                         <td style={{ padding: '5px 10px' }}>{row.label}</td>
-                                        <td style={{ padding: '5px 10px', color: PROVIDER_COLORS[row.group] || 'inherit', fontWeight: 500 }}>{row.group}</td>
+                                        <td style={{ padding: '5px 10px', color: providerColors[row.group] || 'inherit', fontWeight: 500 }}>{row.group}</td>
                                         <td style={{ padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace' }}>
                                             {formatPrice(row.pricing.input, lang)}
                                         </td>
@@ -1197,7 +1115,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                                                 <span key={j}>
                                                     {j > 0 && <span style={{ opacity: 0.4, margin: '0 4px' }}>/</span>}
                                                     <span style={{
-                                                        color: PROVIDER_COLORS[prov] || 'inherit',
+                                                        color: providerColors[prov] || 'inherit',
                                                         fontWeight: 600,
                                                     }}>{name}</span>
                                                 </span>
