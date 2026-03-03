@@ -532,7 +532,7 @@ const AddEditModal: React.FC<{
     const [baseUrl, setBaseUrl] = useState(existing?.model.baseUrl || '');
     const [tasks, setTasks] = useState<string[]>(existing?.model.tasks || []);
     const [apiKey, setApiKey] = useState(existing?.apiKey || '');
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState(existing ? 2 : 1);
 
     const isCustomGroup = selectedGroup === '自定义接口';
     const isRelayGroup = selectedGroup === '第三方中转';
@@ -732,11 +732,21 @@ const AddEditModal: React.FC<{
                         )}
 
                         <div style={{ marginBottom: '16px' }}>
-                            <label style={s.label}>
-                                {lang === 'zh' ? '任务类型（多选）' : 'Task Types (multi-select)'}
-                                <span style={{ fontWeight: 400, fontSize: '11px', opacity: 0.65, marginLeft: '8px' }}>
-                                    已按模型特点预设，可自由修改
+                            <label style={{ ...s.label, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>
+                                    {lang === 'zh' ? '任务类型（多选）' : 'Task Types (multi-select)'}
+                                    <span style={{ fontWeight: 400, fontSize: '11px', opacity: 0.65, marginLeft: '8px' }}>
+                                        已按模型特点预设，可自由修改
+                                    </span>
                                 </span>
+                                {def?.defaultTasks && (
+                                    <button
+                                        style={{ ...s.btnSecondary, padding: '2px 8px', fontSize: '10px', marginLeft: '8px' }}
+                                        onClick={() => setTasks([...(def?.defaultTasks || [])])}
+                                    >
+                                        {lang === 'zh' ? '恢复默认' : 'Reset'}
+                                    </button>
+                                )}
                             </label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
                                 {TASK_TYPES.map(t => {
@@ -779,10 +789,7 @@ const AddEditModal: React.FC<{
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
-                            {!isEdit
-                                ? <button style={s.btnSecondary} onClick={() => setStep(1)}>上一步</button>
-                                : <div />
-                            }
+                            <button style={s.btnPrimary} onClick={() => setStep(1)}>上一步</button>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <button style={s.btnSecondary} onClick={onClose}>取消</button>
                                 <button style={s.btnPrimary} onClick={() => setStep(3)}>下一步</button>
@@ -829,7 +836,7 @@ const AddEditModal: React.FC<{
                         })()}
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px' }}>
-                            <button style={s.btnSecondary} onClick={() => setStep(2)}>上一步</button>
+                            <button style={s.btnPrimary} onClick={() => setStep(2)}>上一步</button>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <button style={s.btnSecondary} onClick={onClose}>取消</button>
                                 <button style={s.btnPrimary} onClick={handleSave}>保存</button>
@@ -855,7 +862,8 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
     const [showRouting, setShowRouting] = useState(false);
     const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
     const [codexStatus, setCodexStatus] = useState<{ installed: boolean; version?: string; loggedIn?: boolean } | null>(null);
-    const [geminiStatus, setGeminiStatus] = useState<{ installed: boolean; version?: string } | null>(null);
+    const [geminiStatus, setGeminiStatus] = useState<{ installed: boolean; version?: string; loggedIn?: boolean } | null>(null);
+    const hasAutoTested = React.useRef(false);
 
     useEffect(() => {
         const handler = (ev: MessageEvent) => {
@@ -864,28 +872,31 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                 const loadedKeys: Record<string, string> = ev.data.apiKeys || {};
                 setModels(loadedModels);
                 setApiKeys(loadedKeys);
-                // Auto-test all models via extension host (avoids CORS in webview sandbox)
-                setTimeout(() => {
-                    loadedModels.forEach((m) => {
-                        const key = loadedKeys[m.id];
-                        if (!key || !m.baseUrl || !m.enabled) return;
-                        const requestId = `autotest_${m.id}_${Date.now()}`;
-                        vscode.postMessage({ command: 'testConnection', modelId: m.modelId, baseUrl: m.baseUrl, apiKey: key, requestId });
-                    });
-                }, 2000);
+                // Only auto-test on first load, not on every tab switch
+                if (!hasAutoTested.current) {
+                    hasAutoTested.current = true;
+                    setTimeout(() => {
+                        loadedModels.forEach((m) => {
+                            const key = loadedKeys[m.id];
+                            if (!key || !m.baseUrl || !m.enabled) return;
+                            const requestId = `autotest_${m.id}_${Date.now()}`;
+                            vscode.postMessage({ command: 'testConnection', modelId: m.modelId, baseUrl: m.baseUrl, apiKey: key, requestId });
+                        });
+                    }, 2000);
+                }
             }
             // Handle auto-test results (same handler as manual test)
             if (ev.data.command === 'testResult' && ev.data.requestId?.startsWith('autotest_')) {
                 // Extract model config id from requestId: autotest_{configId}_{timestamp}
                 const parts = ev.data.requestId.split('_');
                 const configId = parts.slice(1, -1).join('_');
-                setTestResults(prev => ({ ...prev, [configId]: { ok: ev.data.ok, msg: ev.data.msg || (ev.data.ok ? '已连通' : '失败') } }));
+                setTestResults(prev => ({ ...prev, [configId]: { ok: ev.data.ok, msg: ev.data.ok ? '已连通' : (ev.data.msg || '失败') } }));
             }
             if (ev.data.command === 'codexStatus') {
                 setCodexStatus({ installed: ev.data.installed, version: ev.data.version, loggedIn: ev.data.loggedIn });
             }
             if (ev.data.command === 'geminiStatus') {
-                setGeminiStatus({ installed: ev.data.installed, version: ev.data.version });
+                setGeminiStatus({ installed: ev.data.installed, version: ev.data.version, loggedIn: ev.data.loggedIn });
             }
         };
         window.addEventListener('message', handler);
@@ -968,7 +979,9 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                         {codexStatus?.version && <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '11px' }}>v{codexStatus.version}</span>}
                         <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '2px' }}>
                             {codexStatus?.installed
-                                ? 'ChatGPT 账号已接入 · ai_codex_task 工具可用 · 无需 API Key'
+                                ? (codexStatus.loggedIn
+                                    ? 'ChatGPT 账号已登录 · ai_codex_task 工具可用 · 无需 API Key'
+                                    : 'Codex CLI 已安装 · 使用前需先登录 ChatGPT 账号')
                                 : '安装后可用 ChatGPT Plus 账号直接调用，无需 API Key'}
                         </div>
                     </div>
@@ -1007,7 +1020,9 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ lang }) => {
                         {geminiStatus?.version && <span style={{ marginLeft: '8px', opacity: 0.6, fontSize: '11px' }}>v{geminiStatus.version}</span>}
                         <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '2px' }}>
                             {geminiStatus?.installed
-                                ? '使用 Google 本地凭据 · ai_gemini_task 工具可用 · 无需 API Key'
+                                ? (geminiStatus.loggedIn
+                                    ? 'Google 账号已登录 · ai_gemini_task 工具可用 · 无需 API Key'
+                                    : 'Gemini CLI 已安装 · 使用前需先登录 Google 账号')
                                 : '安装后可用 Google 账号本地凭据调用，无需 API Key'}
                         </div>
                     </div>

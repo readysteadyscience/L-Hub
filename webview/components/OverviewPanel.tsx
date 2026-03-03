@@ -130,10 +130,10 @@ const ModelStatusChip: React.FC<{ m: ModelStatus }> = ({ m }) => {
                 fontWeight: 600, fontSize: '12px',
                 color: providerColors[m.group] || 'var(--vscode-editor-foreground)',
             }}>
-                {m.group?.split(' ')[0] || m.modelId}
+                {m.group === 'cli' ? m.label : (m.group?.split(' ')[0] || m.modelId)}
             </span>
             <span style={{ color: 'var(--vscode-descriptionForeground)', fontSize: '11px', opacity: 0.7 }}>
-                {m.label?.split(' ').slice(0, 2).join(' ')}
+                {m.group === 'cli' ? (m.testMsg || '') : m.label?.split(' ').slice(0, 2).join(' ')}
             </span>
         </div>
     );
@@ -217,10 +217,21 @@ const OverviewPanel: React.FC<{ lang: Lang; onSwitchTab: (tab: string) => void }
     const [stats, setStats] = useState<OverviewStats | null>(null);
     const [testingAll, setTestingAll] = useState(false);
 
+    const hasAutoTriggered = React.useRef(false);
+
     useEffect(() => {
         const handler = (ev: MessageEvent) => {
             if (ev.data.command === 'overviewStats') {
                 setStats(ev.data.stats);
+                // Auto-trigger test once if no models are online (first load after reload)
+                const models = ev.data.stats?.models || [];
+                const apiModels = models.filter((m: any) => m.group !== 'cli');
+                const onlineApi = apiModels.filter((m: any) => m.status === 'online').length;
+                if (!hasAutoTriggered.current && onlineApi === 0 && apiModels.length > 0) {
+                    hasAutoTriggered.current = true;
+                    setTestingAll(true);
+                    setTimeout(() => vscode.postMessage({ command: 'testAllModels' }), 1000);
+                }
             }
             if (ev.data.command === 'testAllComplete') {
                 setTestingAll(false);

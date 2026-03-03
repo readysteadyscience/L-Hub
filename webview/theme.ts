@@ -36,6 +36,7 @@ export const providerColors: Record<string, string> = {
     'Anthropic (Claude)': '#CC785C',
     'Google (Gemini)': '#4285F4',
     'Mistral': '#FF6F00',
+    'cli': '#38BDF8',
 };
 
 // ─── Shared Styles ────────────────────────────────────────────────────────────

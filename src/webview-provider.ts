@@ -140,9 +140,7 @@ export class DashboardPanel {
                             });
                             const json = await res.json() as any;
                             if (res.ok) {
-                                const content = json?.choices?.[0]?.message?.content;
-                                const msg = content ? content.replace(/<think>[\s\S]*?<\/think>/g, '').trim().substring(0, 20) || '已连通' : '已连通';
-                                this._panel.webview.postMessage({ command: 'testResult', requestId, ok: true, msg });
+                                this._panel.webview.postMessage({ command: 'testResult', requestId, ok: true, msg: '已连通' });
                             } else {
                                 const err = json?.error?.message || json?.message || json?.msg || `HTTP ${res.status}`;
                                 this._panel.webview.postMessage({ command: 'testResult', requestId, ok: false, msg: (err as string).substring(0, 70) });
@@ -187,11 +185,15 @@ export class DashboardPanel {
                         const { spawnSync: spawnSync2 } = require('child_process');
                         const gVer = spawnSync2('gemini', ['--version'], { encoding: 'utf8', timeout: 5000 });
                         if (gVer.error) {
-                            this._panel.webview.postMessage({ command: 'geminiStatus', installed: false });
+                            this._panel.webview.postMessage({ command: 'geminiStatus', installed: false, loggedIn: false });
                             break;
                         }
                         const gVersion = (gVer.stdout || '').trim();
-                        this._panel.webview.postMessage({ command: 'geminiStatus', installed: true, version: gVersion });
+                        // Check if logged in by looking for oauth_creds.json
+                        const os = require('os');
+                        const credPath = require('path').join(os.homedir(), '.gemini', 'oauth_creds.json');
+                        const loggedIn = require('fs').existsSync(credPath);
+                        this._panel.webview.postMessage({ command: 'geminiStatus', installed: true, version: gVersion, loggedIn });
                         break;
                     }
                     // ── Open terminal with command ────────────────────────────
@@ -226,6 +228,7 @@ export class DashboardPanel {
                         let totalTokens = 0;
                         const recentRequests: any[] = [];
                         try {
+                            if (!this.storage) { throw new Error('storage not initialized'); }
                             const data = this.storage.queryHistory(1, 50);
                             const records = data?.records || [];
                             const todayStart = new Date();
@@ -259,10 +262,31 @@ export class DashboardPanel {
                         const successRate = todayRequests > 0 ? Math.round((successCount / todayRequests) * 100) : 100;
                         const avgLatency = todayRequests > 0 ? Math.round(totalLatency / todayRequests) : 0;
 
+                        // Check CLI statuses
+                        const { spawnSync: ss } = require('child_process');
+                        const codexVer = ss('codex', ['--version'], { encoding: 'utf8', timeout: 3000 });
+                        const geminiVer = ss('gemini', ['--version'], { encoding: 'utf8', timeout: 3000 });
+                        const gCredPath = require('path').join(require('os').homedir(), '.gemini', 'oauth_creds.json');
+
+                        const cliStatuses = [
+                            {
+                                id: 'codex-cli', label: 'Codex CLI',
+                                modelId: 'codex-cli', group: 'cli', enabled: true,
+                                status: codexVer.error ? 'offline' : 'online',
+                                testMsg: codexVer.error ? '未安装' : `v${(codexVer.stdout || '').trim()}`,
+                            },
+                            {
+                                id: 'gemini-cli', label: 'Gemini CLI',
+                                modelId: 'gemini-cli', group: 'cli', enabled: true,
+                                status: geminiVer.error ? 'offline' : 'online',
+                                testMsg: geminiVer.error ? '未安装' : (require('fs').existsSync(gCredPath) ? `v${(geminiVer.stdout || '').trim()} · 已登录` : `v${(geminiVer.stdout || '').trim()} · 未登录`),
+                            },
+                        ];
+
                         this._panel.webview.postMessage({
                             command: 'overviewStats',
                             stats: {
-                                models: modelStatuses,
+                                models: [...modelStatuses, ...cliStatuses],
                                 todayRequests,
                                 successRate,
                                 avgLatency,

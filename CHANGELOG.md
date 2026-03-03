@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.14] - 2026-03-04
+
+### Added
+- **⭐ 同账号驱动 Antigravity + Gemini CLI** — 使用同一个 Google Ultra 账号登录 Antigravity 和 Gemini CLI，一份订阅同时驱动 Claude + Gemini 双顶级模型协同工作
+- **概览面板 CLI 状态** — 系统状态区域新增 Codex CLI / Gemini CLI 状态展示（版本号、登录状态），在线计数从 x/4 升级为 x/6
+- **Reload 后自动测试** — 概览面板加载时自动触发全模型连通测试，无需手动点击"一键全部测试"
+- **编辑向导"恢复默认"按钮** — 任务选择区域新增一键恢复预设任务按钮
+
+### Fixed
+- **编辑模型回填** — 点击"编辑"时直接跳到任务分配页（step 2），所有字段已回填，无需从头配置
+- **编辑模式"上一步"缺失** — 所有步骤均可前后切换，上一步按钮样式与下一步统一
+- **Gemini CLI 登录状态** — 通过检测 `~/.gemini/oauth_creds.json` 区分"已登录"和"未登录"，与 Codex CLI 卡片一致
+- **调用历史 / 延迟 / Token 不显示** — 通过 sqlite3 CLI fallback 解决 Electron ABI 不兼容导致 better-sqlite3 加载失败的问题
+- **Tab 切换重复测试** — 模型管理页不再每次切入都重新测试连通性
+- **测试文案不一致** — 统一测试成功提示为"已连通"
+
+---
+
 ## [0.1.12] - 2026-03-03
 
 ### Fixed

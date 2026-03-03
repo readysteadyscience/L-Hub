@@ -459,7 +459,7 @@ function callGemini(prompt: string, model?: string, workingDir?: string): string
 
 async function main() {
     const server = new Server(
-        { name: 'lhub', version: '0.1.12' },
+        { name: 'lhub', version: '0.1.14' },
         { capabilities: { tools: {} } }
     );
 
