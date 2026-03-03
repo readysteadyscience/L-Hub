@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.1.15] - 2026-03-04
+
+### Fixed
+- **Windows CLI 检测失败** — 为所有 CLI 版本检测（Codex / Gemini）添加 `shell: true`，修复 Windows 上 npm 全局安装的 `.cmd` 命令无法被 `spawnSync` 识别的问题
+
+---
+
 ## [0.1.14] - 2026-03-04
 
 ### Added

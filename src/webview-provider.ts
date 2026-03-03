@@ -169,13 +169,13 @@ export class DashboardPanel {
                     // ── Codex CLI status ──────────────────────────────────────
                     case 'getCodexStatus': {
                         const { spawnSync } = require('child_process');
-                        const ver = spawnSync('codex', ['--version'], { encoding: 'utf8', timeout: 5000 });
+                        const ver = spawnSync('codex', ['--version'], { encoding: 'utf8', timeout: 5000, shell: true });
                         if (ver.error) {
                             this._panel.webview.postMessage({ command: 'codexStatus', installed: false, loggedIn: false });
                             break;
                         }
                         // Try a lightweight env check to see if login token exists
-                        const envCheck = spawnSync('codex', ['--help'], { encoding: 'utf8', timeout: 5000 });
+                        const envCheck = spawnSync('codex', ['--help'], { encoding: 'utf8', timeout: 5000, shell: true });
                         const version = (ver.stdout || '').trim();
                         this._panel.webview.postMessage({ command: 'codexStatus', installed: true, version, loggedIn: envCheck.status === 0 });
                         break;
@@ -183,7 +183,7 @@ export class DashboardPanel {
                     // ── Gemini CLI status ─────────────────────────────────────
                     case 'getGeminiStatus': {
                         const { spawnSync: spawnSync2 } = require('child_process');
-                        const gVer = spawnSync2('gemini', ['--version'], { encoding: 'utf8', timeout: 5000 });
+                        const gVer = spawnSync2('gemini', ['--version'], { encoding: 'utf8', timeout: 5000, shell: true });
                         if (gVer.error) {
                             this._panel.webview.postMessage({ command: 'geminiStatus', installed: false, loggedIn: false });
                             break;
@@ -264,8 +264,8 @@ export class DashboardPanel {
 
                         // Check CLI statuses
                         const { spawnSync: ss } = require('child_process');
-                        const codexVer = ss('codex', ['--version'], { encoding: 'utf8', timeout: 3000 });
-                        const geminiVer = ss('gemini', ['--version'], { encoding: 'utf8', timeout: 3000 });
+                        const codexVer = ss('codex', ['--version'], { encoding: 'utf8', timeout: 3000, shell: true });
+                        const geminiVer = ss('gemini', ['--version'], { encoding: 'utf8', timeout: 3000, shell: true });
                         const gCredPath = require('path').join(require('os').homedir(), '.gemini', 'oauth_creds.json');
 
                         const cliStatuses = [
