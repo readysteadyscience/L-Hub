@@ -11,6 +11,7 @@ import { DashboardPanel } from './webview-provider';
 let mcpServer: LinglanMcpServer;
 let statusBarItem: vscode.StatusBarItem;
 let statusRefreshTimer: ReturnType<typeof setInterval> | undefined;
+let currentExtensionPath: string | undefined;  // stored for cleanup on uninstall
 
 const KEYS_FILE = path.join(os.homedir(), '.l-hub-keys.json');
 
@@ -420,6 +421,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // ── STEP 3: Sync keys + auto-register MCP config ──
     const dbFilePath = path.join(context.globalStorageUri.fsPath, 'history.db');
     await syncKeysToFile(settings, dbFilePath);
+    currentExtensionPath = context.extensionPath;  // save for deactivate cleanup
     autoRegisterMcpConfig(context.extensionPath);
     autoInstallSkill(context.extensionPath);
     autoInjectGeminiMd();
@@ -505,6 +507,15 @@ function cleanupLHub() {
             console.log('[L-Hub] Removed routing rules from geminicodeassist.rules ✅');
         }
     } catch (e) { console.error('[L-Hub] cleanup: routing rules error', e); }
+
+    // 5. Delete own extension directory (macOS: safe to unlink while in use;
+    //    node process retains file descriptor until exit, directory disappears from FS)
+    try {
+        if (currentExtensionPath && fs.existsSync(currentExtensionPath)) {
+            fs.rmSync(currentExtensionPath, { recursive: true, force: true });
+            console.log('[L-Hub] Removed extension directory ✅');
+        }
+    } catch (e) { console.error('[L-Hub] cleanup: extension dir error', e); }
 }
 
 export function deactivate() {
