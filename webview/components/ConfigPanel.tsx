@@ -131,21 +131,21 @@ const MODEL_DEFS: Record<string, ModelDef> = {
         pricing: { input: 1.20, output: 4.80 },
     },
     // ─── OpenAI ───────────────────────────────────────────────────────────────
-    'gpt-5.1': {
-        label: 'GPT-5.1 (推荐)',
+    'gpt-5.4': {
+        label: 'GPT-5.4 (推荐)',
         group: 'OpenAI',
         baseUrl: 'https://api.openai.com/v1',
-        defaultTasks: ['code_gen', 'vision', 'architecture', 'long_context'],
-        note: '最新旗舰，超长上下文，复杂推理与多模态，官方直连',
-        pricing: { input: 1.25, output: 10.00 },
+        defaultTasks: ['code_gen', 'architecture', 'long_context', 'vision'],
+        note: '最新旗舰（2026-03-05），集成 Codex 编程能力，1M token 上下文，原生 computer-use，官方直连',
+        pricing: { input: 2.50, output: 15.00 },
     },
-    'gpt-5.3-codex': {
-        label: 'GPT-5.3 Codex (编程)',
+    'gpt-5.4-pro': {
+        label: 'GPT-5.4 Pro (企业)',
         group: 'OpenAI',
         baseUrl: 'https://api.openai.com/v1',
-        defaultTasks: ['code_gen', 'code_review', 'agentic', 'tool_calling'],
-        note: 'Terminal-Bench #1，Agentic 编程与 DevOps 顶尖，官方直连',
-        pricing: { input: 1.75, output: 14.00 },
+        defaultTasks: ['code_gen', 'agentic', 'architecture', 'tool_calling'],
+        note: '企业级 Pro 版，极限推理 & production 编码，需 Pro/Enterprise 计划，官方直连',
+        pricing: { input: 30.00, output: 180.00 },
     },
     // ─── Anthropic (Claude) ───────────────────────────────────────────────────
     'claude-opus-4-6': {
@@ -229,7 +229,7 @@ const MODEL_DEFS: Record<string, ModelDef> = {
         group: 'API 聚合平台',
         baseUrl: 'https://openrouter.ai/api/v1',
         defaultTasks: ['code_gen', 'architecture', 'translation'],
-        note: '全球最大聚合（500+ 模型）。Model ID 格式：openai/gpt-5.1 · anthropic/claude-sonnet-4-6',
+        note: '全球最大聚合（500+ 模型）。Model ID 格式：openai/gpt-5.4 · anthropic/claude-sonnet-4-6',
         relay: true,
     },
     '__yibuapi__': {
@@ -267,7 +267,7 @@ const GROUP_MODEL_EXAMPLES: Record<string, string> = {
     'MiniMax': 'MiniMax-M2.5 / MiniMax-M2.5-highspeed',
     'Kimi K2': 'kimi-k2-0711-preview',
     'Anthropic (Claude)': 'claude-opus-4-5 / claude-sonnet-4-5',
-    'OpenAI': 'gpt-4o / gpt-4.1',
+    'OpenAI': 'gpt-5.4 / gpt-5.4-pro',
     'Google (Gemini)': 'gemini-2.0-flash / gemini-1.5-pro',
     'Mistral': 'mistral-large / mistral-small',
 };

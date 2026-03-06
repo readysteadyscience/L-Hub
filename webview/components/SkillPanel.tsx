@@ -22,8 +22,8 @@ const SkillPanel: React.FC<{ lang: Lang }> = ({ lang }) => {
             icon: '🔧',
             title: isEN ? 'Code (Quality First)' : '代码（质量优先）',
             items: isEN
-                ? ['Code Review / Bug Check → Codex CLI (GPT 5.3 Codex)', 'Code Generation → Host Model (primary), Codex CLI (backup)', 'Complex Debugging → GLM-5']
-                : ['代码审查 / Bug检查 → Codex CLI（GPT 5.3 Codex）', '代码生成 → 主模型首选，Codex CLI 备选', '复杂调试 / 跨文件工程 → GLM-5']
+                ? ['Code Review / Bug Check → Codex CLI (GPT-5.4)', 'Code Generation → Host Model (primary), Codex CLI (backup)', 'Complex Debugging → GLM-5']
+                : ['代码审查 / Bug检查 → Codex CLI（GPT-5.4）', '代码生成 → 主模型首选，Codex CLI 备选', '复杂调试 / 跨文件工程 → GLM-5']
         },
         {
             icon: '🎯',

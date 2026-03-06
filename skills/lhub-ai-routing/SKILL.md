@@ -41,7 +41,7 @@ description: >
 
 | 条件 | 执行 |
 |------|------|
-| Codex CLI ✅ 已连通 | **必须** `mcp_lhub_ai_codex_task()` → GPT 5.3 Codex |
+| Codex CLI ✅ 已连通 | **必须** `mcp_lhub_ai_codex_task()` → GPT-5.4 |
 | Codex CLI ❌ 未安装 | `mcp_lhub_ai_ask(provider="glm")` → 备选 `provider="deepseek"` |
 | **用户明确要求用特定模型** | 按用户指示执行（如"用 Claude Opus 写"、"用 Sonnet 做"） |
 
@@ -104,16 +104,28 @@ description: >
 
 **触发条件：** 用户要求写小说、散文、文章、故事、剧本、文案、歌词等创意内容。
 
-**一旦触发，上面所有普通路由规则全部暂停。** 不走"翻译→DeepSeek"或"代码→Codex"的逻辑，而是进入以下 6 步固定流程：
+**一旦触发，上面所有普通路由规则全部暂停。** 进入以下 7 步固定流程。
+
+### 🔴 强制通报规则（MANDATORY）
+**在每步模型调用前，主模型必须先向用户输出进度播报，格式如下：**
 
 ```
-步骤 1: mcp_lhub_ai_multi_ask() → Qwen + GLM 并行出大纲 + 核心设定
-步骤 2: mcp_lhub_ai_ask(provider="gpt") → 综合两份大纲，择优融合
-步骤 3: mcp_lhub_ai_multi_ask() → Qwen + GLM + MiniMax 至少 3 模型并行写初稿
-步骤 4: 主模型综合择优，融合各家最好的段落
-步骤 5: mcp_lhub_ai_ask(provider="minimax") → 去GPT味 + 中文文笔打磨
-步骤 6: mcp_lhub_ai_ask(provider="glm") → 逻辑连贯性最终检查
-步骤 7: 主模型交付给用户（不再修改内容）
+📝 创意协作链 步骤 X/7：[步骤说明] → 正在调用 [模型名]…
+```
+
+示例：`📝 创意协作链 步骤 1/7：大纲竞标 → 正在调用 Qwen + GLM 并行生成…`
+
+**禁止静默执行。每步必须先播报，再调用工具。**
+
+### 执行流程
+```
+步骤 1: [播报] → mcp_lhub_ai_multi_ask(providers=["qwen","glm"]) → 并行出大纲 + 核心设定
+步骤 2: [播报] → mcp_lhub_ai_ask(provider="gpt") → GPT-5.4 综合两份大纲，择优融合
+步骤 3: [播报] → mcp_lhub_ai_multi_ask(providers=["qwen","glm","minimax"]) → 3 模型并行写初稿
+步骤 4: [播报] → 主模型综合择优，融合各家最好的段落（主模型自己完成，无需调用 MCP）
+步骤 5: [播报] → mcp_lhub_ai_ask(provider="minimax") → 去GPT味 + 中文文笔打磨
+步骤 6: [播报] → mcp_lhub_ai_ask(provider="glm") → 逻辑连贯性最终检查
+步骤 7: [播报"✅ 创意协作链完成，交付最终版本"] → 主模型交付给用户
 ```
 
 > **创意写作任务结束后，自动恢复普通路由规则。**

@@ -12,7 +12,7 @@ const RoutingGuidePanel: React.FC<{ lang: Lang }> = ({ lang }) => {
             colModel: 'Recommended Model',
             colReason: 'Reason for Recommendation',
             data: [
-                { task: 'Code Generation', model: 'GPT/Codex 5.3', reason: 'Terminal-Bench #1; Codex CLI directly modifies local workspace.' },
+                { task: 'Code Generation', model: 'GPT-5.4', reason: 'Integrates Codex capability; 1M context; Codex CLI directly modifies local workspace.' },
                 { task: 'Agentic Coding', model: 'MiniMax-M2.5 Coding', reason: 'SWE-bench 80.2% ≈ Claude Opus 4.6; BFCL Tool Calling 76.8% surpasses Opus.' },
                 { task: 'Multi-step / Chains', model: 'GLM-5 Coding Plan', reason: 'SWE-bench 77.8% (top-tier); Outstanding long context planning.' },
                 { task: 'Economical Code', model: 'DeepSeek-V3', reason: 'Unbeatable cost-effectiveness, lightning fast.' },
@@ -20,7 +20,7 @@ const RoutingGuidePanel: React.FC<{ lang: Lang }> = ({ lang }) => {
                 { task: 'UI / Frontend', model: 'Gemini 3.1 Pro', reason: 'ARC-AGI-2 Global #1 (77.1%); Unmatched frontend design.' },
                 { task: 'Math / Logic', model: 'Gemini 3.1 Pro', reason: 'GPQA 94.3%; Competitive Programming Elo 2887.' },
                 { task: 'Long Context Summaries', model: 'Gemini 3.1 Pro', reason: '1M+ token context window.' },
-                { task: 'Terminal / DevOps', model: 'GPT-5.3 Codex', reason: 'Terminal-Bench #1.' },
+                { task: 'Terminal / DevOps', model: 'GPT-5.4', reason: 'Integrates Codex coding capabilities; strongest agentic execution.' },
                 { task: 'Creative / Mass Gen', model: 'MiniMax-M2.5 HighSpeed', reason: '100+ tokens/sec, high-speed output.' },
                 { task: 'Local File Operations', model: 'Codex CLI (`ai_codex_task`)', reason: 'OAuth Login (No Key Needed); Autonomous workspace manipulation.' },
                 { task: 'Local Agentic', model: 'Gemini CLI (`ai_gemini_task`)', reason: 'Google OAuth (No Key Needed); Built-in file & browser agents.' }
@@ -33,7 +33,7 @@ const RoutingGuidePanel: React.FC<{ lang: Lang }> = ({ lang }) => {
             colModel: '推荐绑定模型',
             colReason: '核心竞争力入选理由',
             data: [
-                { task: '代码生成', model: 'GPT/Codex 5.3', reason: 'Terminal-Bench #1；自带 Codex CLI 能够直接读写操作本地代码' },
+                { task: '代码生成', model: 'GPT-5.4', reason: '集成 Codex 编程能力，1M 上下文，Codex CLI 能够直接读写操作本地代码' },
                 { task: 'Agentic 复杂编码', model: 'MiniMax-M2.5 Coding', reason: 'SWE-bench 80.2% ≈ Claude Opus 4.6；BFCL 工具调用 76.8% 全球第二' },
                 { task: '多步调试 / 工具链', model: 'GLM-5 Coding Plan', reason: 'SWE-bench 77.8%，顶级梯队；长程任务规划能力极强' },
                 { task: '代码经济型', model: 'DeepSeek-V3', reason: '无敌的性价比与极快的首字输出' },
@@ -41,7 +41,7 @@ const RoutingGuidePanel: React.FC<{ lang: Lang }> = ({ lang }) => {
                 { task: 'UI / 前端视觉设计', model: 'Gemini 3.1 Pro', reason: 'ARC-AGI-2 全球 #1（77.1%）；美学品位独步天下' },
                 { task: '极强推理 / 算法 / 数学', model: 'Gemini 3.1 Pro', reason: 'GPQA 94.3%；竞技编程水平超神（Elo 2887）' },
                 { task: '超长文本 / 源码库总结', model: 'Gemini 3.1 Pro', reason: '稳定扛起百万 Token 级别的上下文洪流' },
-                { task: '终端命令 / DevOps', model: 'GPT-5.3 Codex', reason: 'Terminal-Bench 霸榜选手' },
+                { task: '终端命令 / DevOps', model: 'GPT-5.4', reason: '集成 Codex 编程能力，Agentic 执行与工程任务顶尖' },
                 { task: '极速生成 / 闲聊 / 脑暴', model: 'MiniMax-M2.5 HighSpeed', reason: '100 tok/s，流式体验拉满' },
                 { task: '独立安全本地文件操作', model: 'Codex CLI (`ai_codex_task`)', reason: '直接走 OAuth 免 Key 嫖；以隔离全功能独立 Agent 形态干脏活' },
                 { task: '系统级深度本地爬虫', model: 'Gemini CLI (`ai_gemini_task`)', reason: '走 Google OAuth 订阅额度；原厂自带视效浏览器控制系统' }

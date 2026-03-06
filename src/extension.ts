@@ -108,25 +108,104 @@ function autoInstallSkill(extensionPath: string) {
     }
 }
 
+// ─── Auto Inject GEMINI.md Mandatory Delegation Rules ────────────────────────
+
+const GEMINI_MD_MARKER_START = '<!-- L-Hub Mandatory Delegation Rules v0.2 -->';
+const GEMINI_MD_MARKER_OLD = '⛔ 强制委派规则';  // older marker without version
+
+const GEMINI_MD_RULES_BLOCK = `
+${GEMINI_MD_MARKER_START}
+
+## ⛔ 强制委派规则（不可违反）
+
+以下任务**主模型绝对禁止自己直接输出**，必须先通过 L-Hub MCP 委派：
+
+| 任务类型 | 禁止行为 | 必须执行 |
+|---------|---------|--------|
+| 文案 / 版本说明 / 公告 / 介绍 | ❌ 主模型直接写 | ✅ \`mcp_lhub_ai_ask(provider="deepseek")\` |
+| 翻译（任意语言互译） | ❌ 主模型直接译 | ✅ \`mcp_lhub_ai_ask(provider="deepseek")\` |
+| 总结 / 整理 / 归纳 | ❌ 主模型直接写 | ✅ \`mcp_lhub_ai_ask(provider="deepseek")\` |
+| 创意写作 / 中文文学内容 | ❌ 主模型直接写 | ✅ \`mcp_lhub_ai_ask(provider="minimax")\` |
+| 代码生成（Codex CLI 已连通时） | ❌ 主模型直接写代码 | ✅ \`mcp_lhub_ai_codex_task()\` |
+
+**唯一例外：用户明确说"你来写"/"用 Claude 写"/"不用 MCP"时，按用户指示执行。**
+
+主模型直接输出上述类型内容（未先调 MCP）= 违规，事后必须道歉并补充委派。
+
+<!-- L-Hub Mandatory Delegation Rules End -->
+`;
+
+/**
+ * Auto-inject mandatory delegation rules into ~/.gemini/GEMINI.md.
+ * Idempotent: skips if current version marker already present.
+ * Replaces old version block if found.
+ */
+function autoInjectGeminiMd() {
+    const geminiDir = path.join(os.homedir(), '.gemini');
+    const geminiMdPath = path.join(geminiDir, 'GEMINI.md');
+
+    try {
+        // Ensure ~/.gemini exists
+        if (!fs.existsSync(geminiDir)) {
+            fs.mkdirSync(geminiDir, { recursive: true });
+        }
+
+        let content = fs.existsSync(geminiMdPath)
+            ? fs.readFileSync(geminiMdPath, 'utf8')
+            : '';
+
+        // Already on latest version — skip
+        if (content.includes(GEMINI_MD_MARKER_START)) {
+            console.log('[L-Hub] GEMINI.md delegation rules already up-to-date, skipping');
+            return;
+        }
+
+        // Remove old version block if present (between old marker and "End" comment)
+        if (content.includes(GEMINI_MD_MARKER_OLD)) {
+            content = content.replace(
+                /\n?<!-- L-Hub Mandatory.*?End -->\n?/s, ''
+            ).replace(
+                /\n?## ⛔ 强制委派规则[\s\S]*?主模型直接输出上述类型内容.*?\n/,
+                ''
+            );
+        }
+
+        // Append new block
+        const updated = content.trimEnd() + '\n' + GEMINI_MD_RULES_BLOCK;
+        fs.writeFileSync(geminiMdPath, updated, 'utf8');
+        console.log('[L-Hub] Auto-injected mandatory delegation rules into GEMINI.md ✅');
+    } catch (err) {
+        console.error('[L-Hub] Failed to inject GEMINI.md rules:', err);
+    }
+}
+
 // ─── Auto Routing Rules ───────────────────────────────────────────────────────
 
 const LHUB_RULES_MARKER = '[L-Hub Auto-Routing]';
+const LHUB_RULES_VERSION = '[L-Hub-Rules-v2]';
 
 /**
  * Auto-inject routing rules into Antigravity's geminicodeassist.rules setting.
  * Strategy: multi-model parallel + host model arbitration.
  * Priority: save Antigravity quota first, features second.
- * Idempotent — safe to call on every activation.
+ * Idempotent — safe to call on every activation. Version-aware — updates on upgrade.
  */
 async function autoInjectRoutingRules(settings: SettingsManager) {
     try {
         const config = vscode.workspace.getConfiguration('geminicodeassist');
-        const currentRules = config.get<string>('rules', '');
+        let currentRules = config.get<string>('rules', '');
 
-        // Already injected — don't duplicate
-        if (currentRules.includes(LHUB_RULES_MARKER)) {
-            console.log('[L-Hub] Routing rules already present, skipping injection');
+        // Already on latest version — skip
+        if (currentRules.includes(LHUB_RULES_VERSION)) {
+            console.log('[L-Hub] Routing rules already up-to-date, skipping injection');
             return;
+        }
+
+        // Remove old version block if present (upgrade path)
+        if (currentRules.includes(LHUB_RULES_MARKER)) {
+            const markerIdx = currentRules.indexOf(LHUB_RULES_MARKER);
+            currentRules = currentRules.substring(0, markerIdx).trimEnd();
+            console.log('[L-Hub] Removing old routing rules for upgrade');
         }
 
         // Detect which models the user has configured
@@ -143,6 +222,7 @@ async function autoInjectRoutingRules(settings: SettingsManager) {
         // Build dynamic rules based on what's actually available
         const rules: string[] = [
             LHUB_RULES_MARKER,
+            LHUB_RULES_VERSION,
             '核心策略：多模型并行 + 主模型裁决（最大化节省 Antigravity 额度）',
             '主模型只做调度、决策和交付，体力活委派给 L-Hub 中的专家模型。',
             '',
@@ -331,6 +411,7 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
         const storagePath = context.globalStorageUri.fsPath;
         storage = new HistoryStorage(storagePath);
+        storage.cleanupOldRecords(30);
         console.log('[L-Hub] HistoryStorage initialized ✅');
     } catch (err) {
         console.error('[L-Hub] HistoryStorage failed to init (SQLite ABI issue?), history will be disabled:', err);
@@ -341,6 +422,7 @@ export async function activate(context: vscode.ExtensionContext) {
     await syncKeysToFile(settings, dbFilePath);
     autoRegisterMcpConfig(context.extensionPath);
     autoInstallSkill(context.extensionPath);
+    autoInjectGeminiMd();
     await autoInjectRoutingRules(settings);
 
     // ── STEP 4: Create Status Bar Item ──

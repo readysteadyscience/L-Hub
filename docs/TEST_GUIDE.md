@@ -1,4 +1,4 @@
-# L-Hub 安装验证测试
+# L-Hub v0.2.1 安装验证测试
 
 > 将下面的 **测试 Prompt** 粘贴到 Antigravity 聊天框中，主模型会自动逐项测试所有功能并给出报告。
 
@@ -7,7 +7,7 @@
 ## 测试 Prompt（直接复制粘贴）
 
 ```
-请执行 L-Hub 完整功能验证测试，逐项测试以下所有 MCP 工具，并在最后给出标准测试报告。
+请执行 L-Hub v0.2.1 完整功能验证测试，逐项测试以下所有 MCP 工具，并在最后给出标准测试报告。
 
 === 测试项 ===
 
@@ -26,11 +26,14 @@
 5. 【ai_consensus】调用 mcp_lhub_ai_consensus(message="JavaScript 中 const 和 let 的区别是什么？请用一句话回答", criteria="accuracy")
    通过标准：返回评分和最佳答案
 
-6. 【ai_codex_task】调用 mcp_lhub_ai_codex_task(task="echo L-Hub Codex test OK")
+6. 【ai_codex_task + Streaming】调用 mcp_lhub_ai_codex_task(task="echo L-Hub Codex GPT-5.4 test OK")
    通过标准：返回执行结果（如未安装 Codex CLI 则标记为 SKIP）
 
 7. 【ai_gemini_task】调用 mcp_lhub_ai_gemini_task(prompt="请回复：Gemini CLI 连通测试成功")
    通过标准：返回正常回复（如未安装 Gemini CLI 则标记为 SKIP）
+
+8. 【Streaming 长文测试】调用 mcp_lhub_ai_ask(message="请写一篇200字的散文，主题：秋天的早晨", provider="qwen")
+   通过标准：完整返回200字散文（不超时）
 
 === 报告格式 ===
 
@@ -38,7 +41,7 @@
 
 ## L-Hub 测试报告
 - 测试时间：<当前时间>
-- L-Hub 版本：<从 ai_list_providers 获取>
+- L-Hub 版本：0.2.1
 - 已配置模型数：<数量>
 
 | # | 测试项 | 状态 | 耗时 | 备注 |
@@ -48,10 +51,11 @@
 | 3 | ai_ask (指定provider) | ✅/❌ | Xms | |
 | 4 | ai_multi_ask | ✅/❌ | Xms | X个模型 |
 | 5 | ai_consensus | ✅/❌ | Xms | |
-| 6 | ai_codex_task | ✅/❌/SKIP | Xms | |
+| 6 | ai_codex_task (GPT-5.4) | ✅/❌/SKIP | Xms | |
 | 7 | ai_gemini_task | ✅/❌/SKIP | Xms | |
+| 8 | Streaming 长文 | ✅/❌ | Xms | 200字散文 |
 
-总结：X/7 通过（X 项跳过）
+总结：X/8 通过（X 项跳过）
 
 如发现问题，请将此报告粘贴到：
 https://github.com/readysteadyscience/L-Hub/issues/new
@@ -66,3 +70,13 @@ https://github.com/readysteadyscience/L-Hub/issues/new
 ```
 调用 mcp_lhub_ai_list_providers() 列出所有可用模型，然后用 mcp_lhub_ai_ask 向第一个可用模型发送 "L-Hub 测试成功"。
 ```
+
+---
+
+## v0.2.1 新特性验证
+
+| 特性 | 验证方法 |
+|------|---------|
+| GPT-5.4 适配 | 在 Dashboard → 模型管理 中应看到 `GPT-5.4 (推荐)` 选项 |
+| Codex CLI v0.111.0 | `ai_list_providers` 输出应显示 `codex-cli 0.111.0` |
+| Streaming 支持 | 测试项 8 成功且不超时即验证通过 |

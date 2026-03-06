@@ -108,7 +108,7 @@ const LEGACY_PROVIDERS: Record<string, { url: string; model: string }> = {
     qwen: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max' },
     minimax: { url: 'https://api.minimax.io/v1', model: 'MiniMax-M2.5-highspeed' },
     kimi: { url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-auto' }, // k2-instruct 并非全用户开放，使用 v1-auto 兜底
-    gpt: { url: 'https://api.openai.com/v1', model: 'gpt-5.3-codex' },
+    gpt: { url: 'https://api.openai.com/v1', model: 'gpt-5.4' },     // GPT-5.4 (2026-03-05): integrates Codex coding capabilities, 1M context
     gemini: { url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.1-pro-preview' },
     mistral: { url: 'https://api.mistral.ai/v1', model: 'mistral-large-latest' },
     // NOTE: 'claude' intentionally omitted — Antigravity IS Claude. Routing tasks
@@ -193,7 +193,7 @@ function resolveRoute(message: string, config: LHubConfig, forcedProvider?: stri
     // v1 legacy fallback
     const legacy: Record<string, string> = config.legacy || (config as any);
     // Routing philosophy:
-    // - Code writing  → gpt (Codex 5.3 API). For file-level code, prefer ai_codex_task (CLI).
+    // - Code writing  → gpt (GPT-5.4 API). For file-level code, prefer ai_codex_task (CLI).
     // - Planning/arch → Claude (Antigravity itself — no need to route via L-Hub)
     // - Chinese/docs  → qwen | UI/creative → minimax | Math/algo → gemini
     let providerKey = forcedProvider || 'gpt'; // Codex 5.3 as default code writer
@@ -232,27 +232,102 @@ async function callProvider(route: RouteResult, message: string, systemPrompt?: 
     if (systemPrompt) { messages.push({ role: 'system', content: systemPrompt }); }
     messages.push({ role: 'user', content: message });
 
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${route.apiKey}`,
-        },
-        body: JSON.stringify({ model: route.modelId, messages, temperature: 0.7 }),
-    });
+    // ── Streaming mode: 15s first-byte timeout, no total timeout ─────────────
+    // This fixes long-form creative writing timeouts: once the API starts
+    // streaming, we collect chunks until done — no matter how long it takes.
+    const controller = new AbortController();
+    const firstByteTimer = setTimeout(() => controller.abort(), 15_000);
+    let firstByteReceived = false;
+
+    let res: Response;
+    try {
+        res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${route.apiKey}`,
+            },
+            body: JSON.stringify({ model: route.modelId, messages, temperature: 0.7, stream: true }),
+            signal: controller.signal,
+        });
+    } catch (e: unknown) {
+        clearTimeout(firstByteTimer);
+        if (e instanceof Error && e.name === 'AbortError') {
+            throw new Error(`${route.label} API timeout (15s — no response received)`);
+        }
+        throw e;
+    }
 
     if (!res.ok) {
+        clearTimeout(firstByteTimer);
         const errText = await res.text();
+        // Some providers return non-streaming error even in stream mode — handle gracefully
         throw new Error(`${route.label} API ${res.status}: ${errText.slice(0, 300)}`);
     }
 
-    const data = await res.json() as any;
+    // ── Read SSE stream ───────────────────────────────────────────────────────
+    const reader = res.body?.getReader();
+    if (!reader) {
+        clearTimeout(firstByteTimer);
+        // Fallback: try reading as plain JSON (provider didn't stream)
+        const data = await res.json() as any;
+        return {
+            text: (data.choices?.[0]?.message?.content as string) || 'No response',
+            inputTokens: (data.usage?.prompt_tokens as number) || 0,
+            outputTokens: (data.usage?.completion_tokens as number) || 0,
+        };
+    }
+
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let buffer = '';
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+
+            // Cancel first-byte timer once data starts flowing
+            if (!firstByteReceived && value && value.length > 0) {
+                firstByteReceived = true;
+                clearTimeout(firstByteTimer);
+            }
+
+            if (done) { break; }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed === 'data: [DONE]') { continue; }
+                if (!trimmed.startsWith('data: ')) { continue; }
+                try {
+                    const json = JSON.parse(trimmed.slice(6)) as any;
+                    const delta = json.choices?.[0]?.delta?.content;
+                    if (typeof delta === 'string') { fullText += delta; }
+                    // Capture token usage (usually in last chunk)
+                    if (json.usage) {
+                        inputTokens = json.usage.prompt_tokens || 0;
+                        outputTokens = json.usage.completion_tokens || 0;
+                    }
+                } catch { /* skip malformed SSE line */ }
+            }
+        }
+    } finally {
+        reader.releaseLock();
+        clearTimeout(firstByteTimer);
+    }
+
     return {
-        text: (data.choices?.[0]?.message?.content as string) || 'No response',
-        inputTokens: (data.usage?.prompt_tokens as number) || 0,
-        outputTokens: (data.usage?.completion_tokens as number) || 0,
+        text: fullText || 'No response',
+        inputTokens,
+        outputTokens,
     };
 }
+
 
 // ─── Auto Fallback Retry Chain ───────────────────────────────────────────────
 
@@ -395,9 +470,10 @@ function buildFileContext(filePaths: string[]): { context: string; warnings: str
 
 function callCodex(task: string, workingDir?: string): string {
     const cwd = workingDir || process.cwd();
+    // Codex CLI v0.111.0+: --model flag must come before the subcommand
     const result = spawnSync(
         'codex',
-        ['exec', '--skip-git-repo-check', '--full-auto', task],
+        ['--model', 'gpt-5.4', 'exec', '--skip-git-repo-check', '--full-auto', task],
         { cwd, encoding: 'utf8', timeout: 300_000 }
     );
     if (result.error) {
@@ -459,7 +535,7 @@ function callGemini(prompt: string, model?: string, workingDir?: string): string
 
 async function main() {
     const server = new Server(
-        { name: 'lhub', version: '0.2.0' },
+        { name: 'lhub', version: '0.2.1' },
         { capabilities: { tools: {} } }
     );
 

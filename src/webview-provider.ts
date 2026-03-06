@@ -181,7 +181,7 @@ export class DashboardPanel {
                         const report = [
                             '## L-Hub 诊断报告',
                             `- 时间: ${new Date().toISOString()}`,
-                            `- L-Hub 版本: 0.2.0`,
+                            `- L-Hub 版本: ${require('../package.json').version}`,
                             `- 已配置模型: ${models.length} 个（${enabledCount} 个已启用）`,
                             `- Codex CLI: ${codexVer.error ? '未安装' : (codexVer.stdout || '').trim()}`,
                             `- Gemini CLI: ${geminiVer.error ? '未安装' : (geminiVer.stdout || '').trim()}`,

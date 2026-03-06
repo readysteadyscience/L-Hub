@@ -94,7 +94,9 @@ export class HistoryStorage {
 
     private _execCli(sql: string): string {
         try {
-            return execSync(`sqlite3 "${this.dbPathStr}" "${sql.replace(/"/g, '\\"')}"`, {
+            // Use stdin pipe to avoid shell injection via SQL content
+            return execSync(`sqlite3 "${this.dbPathStr}"`, {
+                input: sql,
                 timeout: 5000,
                 encoding: 'utf8',
                 maxBuffer: 1024 * 1024,
@@ -106,9 +108,10 @@ export class HistoryStorage {
 
     private _queryCliJson(sql: string): any[] {
         try {
+            // Use stdin pipe to avoid shell injection via SQL content
             const result = execSync(
-                `sqlite3 -json "${this.dbPathStr}" "${sql.replace(/"/g, '\\"')}"`,
-                { timeout: 5000, encoding: 'utf8', maxBuffer: 1024 * 1024 }
+                `sqlite3 -json "${this.dbPathStr}"`,
+                { input: sql, timeout: 5000, encoding: 'utf8', maxBuffer: 1024 * 1024 }
             ).trim();
             if (!result) { return []; }
             return JSON.parse(result);

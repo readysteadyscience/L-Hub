@@ -14,7 +14,7 @@
 
 &nbsp;
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue?style=flat-square&logo=visualstudiocode)](https://github.com/readysteadyscience/L-Hub)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue?style=flat-square&logo=visualstudiocode)](https://github.com/readysteadyscience/L-Hub)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](https://github.com/readysteadyscience/L-Hub/blob/main/LICENSE)
 [![Brand](https://img.shields.io/badge/%E8%B5%B0%E8%B5%B7%E6%99%BA%E9%80%A0-Ready%20Steady%20Science-orange?style=flat-square)](https://github.com/ReadySteadyScience)
 
@@ -179,12 +179,7 @@ lhub / ai_gemini_task
 
 <div align="center">
 
-**微信入群 / WeChat Group**
-
-<img src="assets/wechat-yelzap.png" alt="WeChat QR" width="200">
-
-添加 **YelZap** · 备注来源（如 GitHub / Antigravity）
-*Add YelZap on WeChat, note where you found us*
+**走起智造 · Ready Steady Science** — Linglan Realm
 
 </div>
 

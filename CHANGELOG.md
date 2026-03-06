@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.1] - unreleased
+
+### Changed
+- **适配 GPT-5.4** — OpenAI 于 2026-03-05 发布 GPT-5.4，替代 GPT-5.3-Codex 系列。更新 `LEGACY_PROVIDERS` 默认模型为 `gpt-5.4`，更新 ConfigPanel 模型注册表（新增 `gpt-5.4` 和 `gpt-5.4-pro`，移除旧 `gpt-5.1`/`gpt-5.3-codex` 条目）
+- **Codex CLI v0.111.0 新调用格式** — `callCodex` 函数适配新参数顺序：`codex --model gpt-5.4 exec ...`（`--model` 必须在子命令之前）
+- **流式输出（Streaming）** — `callProvider` 全面升级为 SSE 流式接收：从"30s 总超时"改为"15s 首字节超时 + 无总时长限制"，彻底解决长文创意写作（万字级）并发超时问题。兼容不支持 streaming 的 provider（自动降级）
+
+---
+
 ## [0.2.0] - 2026-03-04
 
 ### Added
