@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 
 export interface RequestRecord {
     id: string;
@@ -41,60 +42,48 @@ CREATE INDEX IF NOT EXISTS idx_client ON request_history(client_name);
 CREATE INDEX IF NOT EXISTS idx_model ON request_history(model);`;
 
 /**
- * HistoryStorage — reads from the shared SQLite database using sql.js (WASM).
+ * HistoryStorage — reads from the shared SQLite database.
  *
- * Architecture:
- * - mcp-server.ts (Node.js process) WRITES to the .db file via better-sqlite3 (no ABI issue)
- * - extension.ts  (Electron process) READS via sql.js (pure WASM, zero ABI issues, 100% cross-platform)
+ * Supports two modes:
+ * 1. Native mode (better-sqlite3) — fast, synchronous, preferred
+ * 2. CLI fallback mode (sqlite3 CLI) — works when native module ABI doesn't match
+ *    the host Electron version (common in VS Code / Antigravity extensions)
  *
- * sql.js loads the entire .db file into memory on init, so all reads are synchronous and fast.
- * The db is reloaded on each query call to pick up new records written by mcp-server.
+ * The MCP server process (pure Node.js) writes records via its own better-sqlite3.
+ * The extension host (Electron) reads via whichever mode works.
  */
 export class HistoryStorage {
+    private db: any = null;
     private dbPathStr: string;
-    private SQL: any = null;
+    private useCliFallback = false;
 
     constructor(storagePath: string) {
         if (!fs.existsSync(storagePath)) {
             fs.mkdirSync(storagePath, { recursive: true });
         }
-        this.dbPathStr = path.join(storagePath, 'history.db');
-        this._initSqlJs();
-    }
+        const dbPath = path.join(storagePath, 'history.db');
+        this.dbPathStr = dbPath;
 
-    private _initSqlJs() {
+        // Try native module first
         try {
-            // sql.js WASM binary is copied to dist/ by webpack CopyPlugin
-            const wasmPath = path.join(__dirname, 'sql-wasm.wasm');
             // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const initSqlJs = require('sql.js');
-            // Initialize synchronously using a promise chain stored in this.SQL
-            // Actual query methods will await this before use
-            this.SQL = initSqlJs({ wasmBinary: fs.existsSync(wasmPath) ? fs.readFileSync(wasmPath) : undefined });
-            console.log('[L-Hub] HistoryStorage: sql.js WASM initialized ✅');
-        } catch (e) {
-            console.error('[L-Hub] HistoryStorage: sql.js init failed:', e);
-            this.SQL = null;
-        }
-    }
-
-    /** Load (or reload) the SQLite db file into an in-memory sql.js database */
-    private async _loadDb(): Promise<any | null> {
-        if (!this.SQL) { return null; }
-        try {
-            const SqlJs = await this.SQL;
-            // If the db file doesn't exist yet, create empty db with schema
-            if (!fs.existsSync(this.dbPathStr)) {
-                const db = new SqlJs.Database();
-                db.run(CREATE_TABLE_SQL);
-                return db;
+            const Database = require('better-sqlite3');
+            this.db = new Database(dbPath);
+            this.db.exec(CREATE_TABLE_SQL);
+            console.log('[L-Hub] HistoryStorage: using native better-sqlite3 ✅');
+        } catch (nativeErr: any) {
+            console.warn('[L-Hub] HistoryStorage: better-sqlite3 native load failed:', nativeErr.message);
+            // Check if sqlite3 CLI is available as fallback
+            try {
+                execSync('sqlite3 --version', { timeout: 3000, encoding: 'utf8' });
+                this.useCliFallback = true;
+                // Ensure table exists via CLI
+                this._execCli(CREATE_TABLE_SQL);
+                console.log('[L-Hub] HistoryStorage: using sqlite3 CLI fallback ✅');
+            } catch {
+                // Neither available — history disabled silently (no popup)
+                throw new Error('SQLite unavailable (no native module or CLI)');
             }
-            const fileBuffer = fs.readFileSync(this.dbPathStr);
-            const db = new SqlJs.Database(fileBuffer);
-            return db;
-        } catch (e) {
-            console.error('[L-Hub] HistoryStorage: failed to load db file:', e);
-            return null;
         }
     }
 
@@ -102,100 +91,104 @@ export class HistoryStorage {
         return this.dbPathStr;
     }
 
+    // ── CLI fallback helpers ──────────────────────────────────────────────────
+
+    private _execCli(sql: string): string {
+        try {
+            return execSync(`sqlite3 "${this.dbPathStr}"`, {
+                input: sql,
+                timeout: 5000,
+                encoding: 'utf8',
+                maxBuffer: 1024 * 1024,
+            }).trim();
+        } catch {
+            return '';
+        }
+    }
+
+    private _queryCliJson(sql: string): any[] {
+        try {
+            const result = execSync(
+                `sqlite3 -json "${this.dbPathStr}"`,
+                { input: sql, timeout: 5000, encoding: 'utf8', maxBuffer: 1024 * 1024 }
+            ).trim();
+            if (!result) { return []; }
+            return JSON.parse(result);
+        } catch {
+            return [];
+        }
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /**
-     * saveRecord — kept for interface compatibility.
-     * In practice, mcp-server.ts (Node.js / better-sqlite3) is the write path.
-     * This extension-host write path uses sql.js in-memory then persists to disk.
-     */
-    public async saveRecord(record: RequestRecord): Promise<void> {
-        const db = await this._loadDb();
-        if (!db) { return; }
+    public saveRecord(record: RequestRecord) {
+        if (this.useCliFallback) {
+            const sql = `INSERT OR IGNORE INTO request_history (id,timestamp,client_name,client_version,method,tool_name,model,duration,input_tokens,output_tokens,total_tokens,request_preview,response_preview,status,error_message) VALUES ('${record.id}',${record.timestamp},'${record.clientName || ''}','${record.clientVersion || ''}','${record.method}','${record.toolName || ''}','${record.model || ''}',${record.duration},${record.inputTokens || 0},${record.outputTokens || 0},${record.totalTokens || 0},'${(record.requestPreview || '').replace(/'/g, "''")}','${(record.responsePreview || '').replace(/'/g, "''")}','${record.status}','${(record.errorMessage || '').replace(/'/g, "''")}');`;
+            this._execCli(sql);
+            return;
+        }
         try {
-            db.run(
-                `INSERT OR IGNORE INTO request_history (
-                    id,timestamp,client_name,client_version,method,tool_name,model,
-                    duration,input_tokens,output_tokens,total_tokens,
-                    request_preview,response_preview,status,error_message
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-                [
-                    record.id, record.timestamp, record.clientName || '', record.clientVersion || '',
-                    record.method, record.toolName || '', record.model || '', record.duration,
-                    record.inputTokens || 0, record.outputTokens || 0, record.totalTokens || 0,
-                    record.requestPreview || '', record.responsePreview || '',
-                    record.status, record.errorMessage || ''
-                ]
-            );
-            fs.writeFileSync(this.dbPathStr, Buffer.from(db.export()));
-        } catch (e) {
-            console.error('[L-Hub] saveRecord error:', e);
-        } finally {
-            db.close();
+            const stmt = this.db.prepare(`
+                INSERT INTO request_history (
+                    id, timestamp, client_name, client_version, method, tool_name, model,
+                    duration, input_tokens, output_tokens, total_tokens, request_preview,
+                    response_preview, status, error_message
+                ) VALUES (
+                    @id, @timestamp, @clientName, @clientVersion, @method, @toolName, @model,
+                    @duration, @inputTokens, @outputTokens, @totalTokens, @requestPreview,
+                    @responsePreview, @status, @errorMessage
+                )
+            `);
+            stmt.run(record);
+        } catch (error) {
+            console.error('Failed to save history record:', error);
         }
     }
 
     public queryHistory(page: number, pageSize: number): { records: RequestRecord[], total: number } {
-        // Synchronous wrapper — sql.js supports synchronous in-memory queries
-        // We load the file synchronously to keep compatibility with callers
-        if (!this.SQL) { return { records: [], total: 0 }; }
-        try {
-            // The SQL Promise might not be resolved yet on first call — handle gracefully
-            let SqlJs: any;
-            // Access the resolved value if available (sql.js resolves quickly on init)
-            let resolved = false;
-            (this.SQL as Promise<any>).then(s => { SqlJs = s; resolved = true; });
-            // Tiny busy-wait (max 200ms) to let WASM init settle on first call
-            const start = Date.now();
-            while (!resolved && Date.now() - start < 200) { /* spin */ }
-            if (!SqlJs) { return { records: [], total: 0 }; }
-            if (!fs.existsSync(this.dbPathStr)) { return { records: [], total: 0 }; }
-            const fileBuffer = fs.readFileSync(this.dbPathStr);
-            const db = new SqlJs.Database(fileBuffer);
-            const offset = (page - 1) * pageSize;
-            const rows = db.exec(
+        const offset = (page - 1) * pageSize;
+
+        if (this.useCliFallback) {
+            const rows = this._queryCliJson(
                 `SELECT * FROM request_history ORDER BY timestamp DESC LIMIT ${pageSize} OFFSET ${offset}`
             );
-            const countRows = db.exec('SELECT COUNT(*) as count FROM request_history');
-            db.close();
-            const columns: string[] = rows[0]?.columns || [];
-            const values: any[][] = rows[0]?.values || [];
-            const records = values.map(row => {
-                const obj: any = {};
-                columns.forEach((col, i) => { obj[col] = row[i]; });
-                return this.mapDbRowToRecord(obj);
-            });
-            const total = countRows[0]?.values?.[0]?.[0] || 0;
-            return { records, total };
-        } catch (e) {
-            console.error('[L-Hub] queryHistory error:', e);
-            return { records: [], total: 0 };
+            const countRows = this._queryCliJson(
+                `SELECT COUNT(*) as count FROM request_history`
+            );
+            return {
+                records: rows.map(this.mapDbRowToRecord),
+                total: countRows[0]?.count || 0,
+            };
         }
+
+        const records = this.db.prepare('SELECT * FROM request_history ORDER BY timestamp DESC LIMIT ? OFFSET ?').all(pageSize, offset);
+        const total = this.db.prepare('SELECT COUNT(*) as count FROM request_history').get() as { count: number };
+
+        return {
+            records: records.map(this.mapDbRowToRecord),
+            total: total.count
+        };
     }
 
     public cleanupOldRecords(daysToKeep: number = 30) {
-        // Cleanup is primarily handled by mcp-server.ts; this is a no-op fallback
-        console.log(`[L-Hub] cleanupOldRecords: managed by mcp-server (>${daysToKeep}d)`);
+        const cutoff = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
+        if (this.useCliFallback) {
+            this._execCli(`DELETE FROM request_history WHERE timestamp < ${cutoff}`);
+            return;
+        }
+        this.db.prepare('DELETE FROM request_history WHERE timestamp < ?').run(cutoff);
     }
 
     public clearAll() {
-        if (!fs.existsSync(this.dbPathStr)) { return; }
-        if (!this.SQL) { return; }
-        // Truncate by overwriting with a fresh empty db
-        try {
-            (this.SQL as Promise<any>).then(SqlJs => {
-                const db = new SqlJs.Database();
-                db.run(CREATE_TABLE_SQL);
-                fs.writeFileSync(this.dbPathStr, Buffer.from(db.export()));
-                db.close();
-            });
-        } catch (e) {
-            console.error('[L-Hub] clearAll error:', e);
+        if (this.useCliFallback) {
+            this._execCli('DELETE FROM request_history');
+            return;
         }
+        this.db.exec('DELETE FROM request_history');
     }
 
     public close() {
-        // sql.js is in-memory, nothing to close at class level
+        if (this.db) { this.db.close(); }
     }
 
     private mapDbRowToRecord(row: any): RequestRecord {

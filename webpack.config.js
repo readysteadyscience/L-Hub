@@ -1,6 +1,5 @@
 const path = require('path');
 const webpack = require('webpack');
-const CopyPlugin = require('copy-webpack-plugin');
 
 const extensionConfig = {
     mode: 'none',
@@ -30,15 +29,6 @@ const extensionConfig = {
     },
     plugins: [
         new webpack.BannerPlugin({ banner: "#!/usr/bin/env node", raw: true, entryOnly: true, test: /cli\.js|mcp-server\.js/ }),
-        // Copy sql.js WASM binary to dist so extension.ts can load it at runtime
-        new CopyPlugin({
-            patterns: [
-                {
-                    from: path.join(__dirname, 'node_modules/sql.js/dist/sql-wasm.wasm'),
-                    to: path.join(__dirname, 'dist/sql-wasm.wasm'),
-                },
-            ],
-        }),
     ],
     externals: {
         vscode: 'commonjs vscode',
