@@ -154,6 +154,10 @@ export class DashboardPanel {
 
 
                     case 'getHistory': {
+                        if (!this.storage) {
+                            this._panel.webview.postMessage({ command: 'loadHistory', data: { records: [], total: 0 } });
+                            break;
+                        }
                         const page = message.page || 1;
                         const pageSize = message.pageSize || 50;
                         const data = this.storage.queryHistory(page, pageSize);

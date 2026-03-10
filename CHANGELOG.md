@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **状态栏 CLI 检测误报未安装** — `updateStatusBar` 中 `spawnSync` 缺少 `shell: true`，导致在 Electron 环境下无法继承完整 PATH，Codex CLI / Gemini CLI 实际已安装却显示 ❌。现已修复，与 Dashboard 检测行为保持一致
+- **SQLite 加载失败弹窗** — `better-sqlite3` ABI 不兼容时会弹出警告对话框影响体验。现改为静默降级：移除 `showWarningMessage`，`getHistory` 加 null guard（返回空数组而非 crash），历史 Tab 显示空状态
 
 ---
 

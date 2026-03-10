@@ -397,11 +397,7 @@ export async function activate(context: vscode.ExtensionContext) {
     let storage: HistoryStorage | null = null;
 
     const openPanelCommand = vscode.commands.registerCommand('l-hub.openPanel', () => {
-        if (!storage) {
-            vscode.window.showWarningMessage(
-                'L-Hub: History storage is unavailable (SQLite load failed). Settings panel will still work.',
-            );
-        }
+        // SQLite failure is handled silently — history tab shows in-panel message
         DashboardPanel.createOrShow(context.extensionUri, storage!, settings, () => updateStatusBar(settings));
     });
     context.subscriptions.push(openPanelCommand);
