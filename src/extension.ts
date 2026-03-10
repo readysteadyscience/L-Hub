@@ -503,15 +503,6 @@ function cleanupLHub() {
             console.log('[L-Hub] Removed routing rules from geminicodeassist.rules ✅');
         }
     } catch (e) { console.error('[L-Hub] cleanup: routing rules error', e); }
-
-    // 5. Delete own extension directory (macOS: safe to unlink while in use;
-    //    node process retains file descriptor until exit, directory disappears from FS)
-    try {
-        if (currentExtensionPath && fs.existsSync(currentExtensionPath)) {
-            fs.rmSync(currentExtensionPath, { recursive: true, force: true });
-            console.log('[L-Hub] Removed extension directory ✅');
-        }
-    } catch (e) { console.error('[L-Hub] cleanup: extension dir error', e); }
 }
 
 export function deactivate() {
