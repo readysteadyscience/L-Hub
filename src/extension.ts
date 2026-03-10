@@ -365,11 +365,11 @@ async function updateStatusBar(settings: SettingsManager) {
         }
 
         // ── CLI status ──
-        const codexCheck = spawnSync('codex', ['--version'], { encoding: 'utf8', timeout: 3000 });
+        const codexCheck = spawnSync('codex', ['--version'], { encoding: 'utf8', timeout: 3000, shell: true });
         const codexOk = !codexCheck.error;
         tooltip.appendMarkdown(`🤖 Codex CLI: ${codexOk ? '✅ 已安装' : '❌ 未安装'}  \n`);
 
-        const geminiCheck = spawnSync('gemini', ['--version'], { encoding: 'utf8', timeout: 3000 });
+        const geminiCheck = spawnSync('gemini', ['--version'], { encoding: 'utf8', timeout: 3000, shell: true });
         const geminiOk = !geminiCheck.error;
         tooltip.appendMarkdown(`🔷 Gemini CLI: ${geminiOk ? '✅ 已安装 (使用 Google 本地凭据)' : '❌ 未安装'}  \n`);
 
