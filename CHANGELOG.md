@@ -6,7 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.2.1] - unreleased
+## [0.2.2] - unreleased
+
+### Added
+- **卸载自动清理** — 扩展禁用/卸载时自动执行 `cleanupLHub()`，移除 MCP 配置条目、Skill 目录、`GEMINI.md` 注入段、路由规则；API Keys（`~/.l-hub-keys.json`）保留不删
+
+### Fixed
+- **状态栏 CLI 检测误报未安装** — `updateStatusBar` 中 `spawnSync` 缺少 `shell: true`，导致在 Electron 环境下无法继承完整 PATH，Codex CLI / Gemini CLI 实际已安装却显示 ❌。现已修复，与 Dashboard 检测行为保持一致
+
+---
+
+## [0.2.1] - 2026-03-06
 
 ### Changed
 - **适配 GPT-5.4** — OpenAI 于 2026-03-05 发布 GPT-5.4，替代 GPT-5.3-Codex 系列。更新 `LEGACY_PROVIDERS` 默认模型为 `gpt-5.4`，更新 ConfigPanel 模型注册表（新增 `gpt-5.4` 和 `gpt-5.4-pro`，移除旧 `gpt-5.1`/`gpt-5.3-codex` 条目）
