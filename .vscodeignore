@@ -1,25 +1,35 @@
-# Files/dirs not needed in the published extension
-.github/
-.vscode/
-.DS_Store
-*.vsix
-*.log
-*.sqlite3
+# ─── Files/dirs NOT needed in published VSIX ─────────────────────────────────
+# Webpack bundles everything into dist/, so source & deps are NOT needed.
 
-# Internal documentation (not for end users)
-docs/HOW_TO_FEED_LINGLAN.md
-docs/RELEASE_WORKFLOW.md
-
-# Development source (webpack bundles into dist/)
+# Source code (webpack output replaces these)
 src/
 webview/
 webpack.config.js
 tsconfig.json
 
-# Test and dev files
+# Dependencies (bundled by webpack)
+node_modules/
+
+# Development & CI
+.github/
+.vscode/
+.eslintrc*
 **/*.test.ts
 **/*.spec.ts
-.eslintrc*
+*.log
 
-.lhub_docs/
+# Build artifacts & releases
+*.vsix
+*.sqlite3
 releases/
+
+# Platform noise
+.DS_Store
+Thumbs.db
+
+# Internal docs (not for end users)
+docs/
+.lhub_docs/
+
+# Source maps (optional — remove if you want debugging in production)
+# *.map
