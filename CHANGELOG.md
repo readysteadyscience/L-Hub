@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.4] - 2026-03-10
+
+### Fixed
+- **Reload Window 后 ⚠️ 激活失败** — `deactivate()` 中 `cleanupLHub()` 的第5步会 `fs.rmSync` 删除自身扩展目录，导致 Reload Window（同样触发 deactivate）后扩展文件消失，重新激活失败。已移除该步骤，扩展目录由 Antigravity 在真正卸载时负责清理
+- **状态栏 CLI 检测误报** — `spawnSync` 加 `shell: true`，修复 Electron PATH 下 Codex/Gemini CLI 无法被检测到的问题
+- **SQLite 加载失败弹窗** — 移除 `showWarningMessage`，改为静默降级；`getHistory` 加 null guard 防 crash
+
+### Added
+- **卸载自动清理** — 禁用/卸载时自动移除 MCP 配置、Skill 目录、`GEMINI.md` 注入段、路由规则（API Keys 保留）
+
+---
+
 ## [0.2.3] - 2026-03-10
 
 ### Fixed
