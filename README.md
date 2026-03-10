@@ -14,7 +14,7 @@
 
 &nbsp;
 
-[![Version](https://img.shields.io/badge/version-0.2.1-blue?style=flat-square&logo=visualstudiocode)](https://github.com/readysteadyscience/L-Hub)
+[![Version](https://img.shields.io/badge/version-0.2.3-blue?style=flat-square&logo=visualstudiocode)](https://github.com/readysteadyscience/L-Hub)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](https://github.com/readysteadyscience/L-Hub/blob/main/LICENSE)
 [![Brand](https://img.shields.io/badge/%E8%B5%B0%E8%B5%B7%E6%99%BA%E9%80%A0-Ready%20Steady%20Science-orange?style=flat-square)](https://github.com/ReadySteadyScience)
 
